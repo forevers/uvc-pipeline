@@ -10,15 +10,16 @@ OBJS = $(SRCS:.cpp=.o)
 # dependency file list
 DEPS = $(SRCS:.cpp=.d)
 
-PRODUCT := webcam
+PRODUCT := uvc_pipeline
 
 CC := g++
-C_INCLUDES = -I./libuvc_77b43d61/libuvc/include -I./libuvc_77b43d61/libuvc/build/include -I/usr/include/libusb-1.0 -I./src -I./src/include
+
+C_INCLUDES = -I./libuvc/include -I./libuvc/build/include `pkg-config --cflags-only-I libusb-1.0` -I./src -I./src/include
 PTHREAD =-pthread
 CFLAGS    := 
 CPPFLAGS := $(DEBUG) $(OPT) $(WARN) $(PTHREAD) -std=c++11 -pipe `pkg-config gtkmm-3.0 --cflags`
 GTKLIB =`pkg-config --cflags --libs gtk+-3.0` `pkg-config gtkmm-3.0 --libs`
-LDFLAGS := $(PTHREAD) $(GTKLIB) -export-dynamic -Wl,-R/home/mvis/projects/d3/libuvc_77b43d61/libuvc/build -L//home/mvis/projects/d3/libuvc_77b43d61/libuvc/build -luvc
+LDFLAGS := $(PTHREAD) $(GTKLIB) -export-dynamic -Wl,-R./libuvc/build -L./libuvc/build -luvc
 LD := g++
 
 all: $(PRODUCT)
@@ -43,3 +44,4 @@ include $(SRCS:.cpp=.d)
 # object rule
 %.o: %.cpp
 	$(CC) $(C_INCLUDES) -c $(CPPFLAGS) -o $@ $(<:.d=.cpp)
+
