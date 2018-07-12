@@ -1,0 +1,16 @@
+// some gtkmm references ...
+// papers.harvie.cz/unsorted/programming-with_gtkmm.pdf
+// https://developer.gnome.org/gtkmm-tutorial/stable/
+
+#include "render_ui.h"
+#include <gtkmm/application.h>
+
+int main(int argc, char* argv[])
+{
+    auto app = Gtk::Application::create(argc, argv, "webcamera_application");
+
+    RenderUI render_ui;
+
+    // Shows the window and returns when it is closed.
+    return app->run(render_ui);
+}
