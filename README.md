@@ -8,6 +8,10 @@ update package list and installed packages
 $ sudo apt-get update
 $ sudo apt-get upgrade -y
 ```
+cmake for building libuvc
+```console
+$ sudo apt-get install cmake
+```
 
 tkinter for python
 ```console
