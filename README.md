@@ -38,6 +38,11 @@ $ cd yavta
 $ make
 ```
 
+gtk+mm for graphics library
+```console
+apt-get install libgtkmm-3.0-dev
+```
+
 other usefull packages
 ```console
 $ sudo apt-get install -y gedit
