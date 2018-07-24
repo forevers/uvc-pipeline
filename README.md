@@ -41,6 +41,7 @@ other usefull packages
 ```console
 $ sudo apt-get install -y gedit
 $ sudo apt-get install -y aptitude
+$ sudo apt-get install -y synaptic
 ```
 
 # camera interogation
