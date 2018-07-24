@@ -10,6 +10,7 @@ $ sudo apt-get upgrade -y
 ```
 cmake for building libuvc
 ```console
+$ sudo apt-get install pkg-config
 $ sudo apt-get install libusb-1.0-0-dev
 $ sudo apt-get install cmake
 ```
