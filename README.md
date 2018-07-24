@@ -10,6 +10,7 @@ $ sudo apt-get upgrade -y
 ```
 cmake for building libuvc
 ```console
+$ sudo apt-get install libusb-1.0-0-dev
 $ sudo apt-get install cmake
 ```
 
@@ -34,6 +35,11 @@ yavta for v4l2 image capture
 $ git clone http://git.ideasonboard.org/git/yavta.git
 $ cd yavta
 $ make
+```
+
+other usefull packages
+```console
+$ sudo apt-get install -y gedit
 ```
 
 # camera interogation
