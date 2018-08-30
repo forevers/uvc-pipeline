@@ -11,14 +11,27 @@ extern int shift_up();
 
 unsigned char* g_rgb_buffer = nullptr;
 
+using namespace std;
+
 CameraConfig camera_config[NUM_UVC_CAMERA] = {
     {2, 640, 640, 480, 30},     // UVC_CAMERA_LOGITECH_WEBCAM
     {4, 240, 120, 720, 60},     // UVC_CAMERA_MVIS_LIDAR
 };
 
 
+void set_widget_margin(Gtk::Widget& widget, int margin) 
+{
+    widget.set_margin_left(margin);
+    widget.set_margin_right(margin);
+    widget.set_margin_top(margin);
+    widget.set_margin_bottom(margin);
+}
+
 RenderUI::RenderUI() :
-    m_scaling(SCALE_MODE_BILINEAR),
+    interior_border_(5),
+    widget_margin_(5),
+    full_screen_(false),
+    m_scaling(SCALE_MODE_NEAREST),
     m_UvcCamera(UVC_CAMERA_NONE),
     m_UvcMode(UVC_MODE_LIBUSB),
     m_VBox(Gtk::ORIENTATION_VERTICAL, 5),
@@ -29,7 +42,7 @@ RenderUI::RenderUI() :
     m_ButtonScaling("Toggle Scaling"),
     m_ButtonQuit("_Quit", /* mnemonic= */ true),
     m_FpsLabel("fps xy.xx", true),
-    m_Banner("UVC Stream Demo"),
+    m_Banner("UVC Video / OpenCV Demo"),
     m_update_scroll_view(true),
     m_ScrolledWindow(),
     m_TextView(),
@@ -38,10 +51,24 @@ RenderUI::RenderUI() :
     m_Worker(),
     m_WorkerThread(nullptr)
 {
-    set_title("Multi-threaded example");
-    set_border_width(5);
+    set_title("UVC Camera OpenCV Demo");
 
-    set_default_size(1280 + 10, 720 + 10);
+    set_border_width(interior_border_);
+
+    // display screen resolution
+    Glib::RefPtr<Gdk::Screen> screen = Gdk::Screen::get_default(); 
+    int primary_monitor = screen->get_primary_monitor();
+    Gdk::Rectangle rect;
+    screen->get_monitor_geometry(primary_monitor, rect);
+    screen_width_ = rect.get_width();
+    screen_height_ = rect.get_height();
+    cout << "screen dimensions : " << screen_width_ << " x " << screen_height_ << endl;
+
+    window_width_ = screen_width_ / 2;
+    window_height_ = screen_height_ / 2;
+
+    set_default_size(window_width_, window_height_);
+    set_position(Gtk::WIN_POS_CENTER);
 
     Gdk::RGBA rgba;
     rgba.set_rgba(0, 0, 0, 1.0);
@@ -52,9 +79,20 @@ RenderUI::RenderUI() :
     // banner label
     m_VBox.pack_start(m_Banner, Gtk::PACK_SHRINK);
 
-    // image views
-    m_VBox.pack_start(m_Image);
-    m_VBox.pack_start(m_ImageScaled);
+    // auto-scaled image views
+    image_scaled_src_.add(image_src_);
+    image_scaled_proc_.add(image_proc_);
+    event_box_src_.add(image_scaled_src_);
+    event_box_proc_.add(image_scaled_proc_);
+    //video_box_.pack_start(image_scaled_src_, Gtk::PACK_EXPAND_WIDGET);
+    //video_box_.pack_start(image_scaled_proc_, Gtk::PACK_EXPAND_WIDGET);
+    video_box_.pack_start(event_box_src_, Gtk::PACK_EXPAND_WIDGET);
+    video_box_.pack_start(event_box_proc_, Gtk::PACK_EXPAND_WIDGET);
+    m_VBox.pack_start(video_box_);
+    //m_VBox.pack_start(image_scaled_src_);
+    //m_VBox.pack_start(image_scaled_proc_);
+    set_widget_margin(image_scaled_src_, widget_margin_);
+    set_widget_margin(image_scaled_proc_, widget_margin_);
 
     // Add the TextView, inside a ScrolledWindow.
     m_ScrolledWindow.add(m_TextView);
@@ -62,7 +100,8 @@ RenderUI::RenderUI() :
     // Only show the scrollbars when they are necessary.
     m_ScrolledWindow.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
 
-    m_VBox.pack_start(m_ScrolledWindow);
+    // sde m_VBox.pack_start(m_ScrolledWindow);
+    m_VBox.pack_start(m_ScrolledWindow, Gtk::PACK_SHRINK);
 
     m_TextView.set_editable(false);
 
@@ -80,6 +119,12 @@ RenderUI::RenderUI() :
     m_ButtonBox.set_layout(Gtk::BUTTONBOX_END);
 
     m_ButtonStartStop.override_color(Gdk::RGBA("green"), Gtk::STATE_FLAG_NORMAL);
+
+    // image view mouse button click handler
+    event_box_src_.add_events(Gdk::BUTTON_PRESS_MASK);
+    event_box_src_.signal_button_press_event().connect(sigc::mem_fun(*this, &RenderUI::on_image_src_button_pressed));
+    event_box_proc_.add_events(Gdk::BUTTON_PRESS_MASK);
+    event_box_proc_.signal_button_press_event().connect(sigc::mem_fun(*this, &RenderUI::on_image_proc_button_pressed));
 
     // Connect the signal handlers to the buttons.
     m_ButtonStartStop.signal_clicked().connect(sigc::mem_fun(*this, &RenderUI::on_start_button_clicked));
@@ -104,16 +149,69 @@ RenderUI::RenderUI() :
 }
 
 
-std::string exec(const char* cmd) {
-    std::array<char, 128> buffer;
-    std::string result;
-    std::shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
-    if (!pipe) throw std::runtime_error("popen() failed!");
+string exec(const char* cmd) {
+    array<char, 128> buffer;
+    string result;
+    shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) throw runtime_error("popen() failed!");
     while (!feof(pipe.get())) {
         if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
             result += buffer.data();
     }
     return result;
+}
+
+
+bool RenderUI::on_key_press_event(GdkEventKey* key_event)
+{
+    cout << "on_key_press_event() entry" << endl;
+
+    switch (key_event->keyval)
+    {
+        case GDK_KEY_Escape:
+            if (full_screen_) {
+                full_screen_ = false;
+                cout << "GDK_KEY_Escape unfullscreen()" << endl;
+                unfullscreen();
+            } else {
+                full_screen_ = true;
+                cout << "GDK_KEY_Escape fullscreen()" << endl;
+                fullscreen();
+            }
+
+        default:
+            break;
+    }
+
+    return Gtk::Window::on_key_press_event(key_event);
+}
+
+
+bool RenderUI::on_image_src_button_pressed(GdkEventButton* button_event)
+{
+    cout << "on_image_src_button_pressed()" << endl;
+    
+    if (event_box_proc_.is_visible()) {
+        event_box_proc_.hide();
+    } else {
+        event_box_proc_.show();
+    }
+
+    return false;
+}
+
+
+bool RenderUI::on_image_proc_button_pressed(GdkEventButton* button_event)
+{
+    cout << "on_image_proc_button_pressed()" << endl;
+
+    if (event_box_src_.is_visible()) {
+        event_box_src_.hide();
+    } else {
+        event_box_src_.show();
+    }
+
+    return false;
 }
 
 
@@ -135,34 +233,34 @@ void RenderUI::on_start_button_clicked()
     
     } else {
           // query for installed cameras
-        std::string list_devices = exec("v4l2-ctl --list-devices");
-        std::cout << list_devices << "\n";
+        string list_devices = exec("v4l2-ctl --list-devices");
+        cout << list_devices << "\n";
 
         m_UvcCamera = UVC_CAMERA_NONE;
         size_t pos = 0;
-        std::string list_devices_iter = list_devices;
+        string list_devices_iter = list_devices;
 
         // webcamera is highest priority
-        std::string delimiter = "UVC Camera (046d:0825)";
-        std::cout << "seeking " << delimiter << "\n";
-        if (std::string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
+        string delimiter = "UVC Camera (046d:0825)";
+        cout << "seeking " << delimiter << "\n";
+        if (string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
             list_devices_iter = list_devices_iter.substr(pos + delimiter.length());
             delimiter = "/dev/video";
-            if (std::string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
+            if (string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
                 m_device_node_string = list_devices_iter.substr(pos, delimiter.length() + 1);
-                std::cout << "m_device_node_string : " << m_device_node_string << "\n";
+                cout << "m_device_node_string : " << m_device_node_string << "\n";
 
                 // extract pid/vid for libusb (lidar camera does not present as part of v4l2-ctl --list-devices response)
-                std::string pid_vid = exec("lsusb");
-                std::string pid_vid_inter = pid_vid;
-                std::string delimiter = "Logitech, Inc. Webcam C270";
-                if (std::string::npos != (pos = pid_vid_inter.find(delimiter, 0))) {
+                string pid_vid = exec("lsusb");
+                string pid_vid_inter = pid_vid;
+                string delimiter = "Logitech, Inc. Webcam C270";
+                if (string::npos != (pos = pid_vid_inter.find(delimiter, 0))) {
                     pid_vid_inter = pid_vid_inter.substr(pos - 10, 9);
-                    std::string::size_type sz = 0;
-                    m_vid = std::stoll(pid_vid_inter, &sz, 16);
+                    string::size_type sz = 0;
+                    m_vid = stoll(pid_vid_inter, &sz, 16);
                     pid_vid_inter = pid_vid_inter.substr(sz + 1);
-                    m_pid = std::stoll(pid_vid_inter, &sz, 16);
-                    std::cout << "pid:vid 0x" << std::hex << m_pid << ":0x" << m_vid << "\n";
+                    m_pid = stoll(pid_vid_inter, &sz, 16);
+                    cout << "pid:vid 0x" << hex << m_pid << ":0x" << m_vid << dec << endl;
 
                     m_UvcCamera = UVC_CAMERA_LOGITECH_WEBCAM;
                 }
@@ -171,28 +269,28 @@ void RenderUI::on_start_button_clicked()
 
         // lidar camera if no webcamera
         if (m_device_node_string.size() == 0) {
-            std::string delimiter = "FX3";
-            std::cout << "seeking " << delimiter << "\n";
-            if (std::string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
+            string delimiter = "FX3";
+            cout << "seeking " << delimiter << "\n";
+            if (string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
                 list_devices_iter = list_devices_iter.substr(pos + delimiter.length());
                 delimiter = "/dev/video";
-                std::cout << "seeking " << delimiter << "\n";
-                if (std::string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
+                cout << "seeking " << delimiter << "\n";
+                if (string::npos != (pos = list_devices_iter.find(delimiter, 0))) {
                     m_device_node_string = list_devices_iter.substr(pos, delimiter.length() + 1);
-                    std::cout << "m_device_node_string : " << m_device_node_string << "\n";
+                    cout << "m_device_node_string : " << m_device_node_string << "\n";
 
                     // extract pid/vid for libusb (lidar camera does not present as part of v4l2-ctl --list-devices response)
-                    std::string pid_vid = exec("lsusb");
-                    std::string pid_vid_inter = pid_vid;
-                    std::string delimiter = "Cypress Semiconductor Corp.";
-                    if (std::string::npos != (pos = pid_vid_inter.find(delimiter, 0))) {
+                    string pid_vid = exec("lsusb");
+                    string pid_vid_inter = pid_vid;
+                    string delimiter = "Cypress Semiconductor Corp.";
+                    if (string::npos != (pos = pid_vid_inter.find(delimiter, 0))) {
                         pid_vid_inter = pid_vid_inter.substr(pos - 10, 9);
 
-                        std::string::size_type sz = 0;
-                        m_vid = std::stoll(pid_vid_inter, &sz, 16);
+                        string::size_type sz = 0;
+                        m_vid = stoll(pid_vid_inter, &sz, 16);
                         pid_vid_inter = pid_vid_inter.substr(sz + 1);
-                        m_pid = std::stoll(pid_vid_inter, &sz, 16);
-                        std::cout << "pid:vid 0x" << std::hex << m_pid << ":0x" << m_vid << "\n";
+                        m_pid = stoll(pid_vid_inter, &sz, 16);
+                        cout << "pid:vid 0x" << hex << m_pid << ":0x" << m_vid << dec << endl;
 
                         m_UvcCamera = UVC_CAMERA_MVIS_LIDAR;
                     }
@@ -201,7 +299,7 @@ void RenderUI::on_start_button_clicked()
         }
 
         if (m_device_node_string.size() == 0) {
-            std::cout << "no camera detected" << std::endl;
+            cout << "no camera detected" << endl;
             return;
         }
 
@@ -217,15 +315,18 @@ void RenderUI::on_start_button_clicked()
         width_ = camera_config[m_UvcCamera].width_actual;
         height_ = camera_config[m_UvcCamera].height;
 
+        image_scaled_src_.SetAspectRatio(width_, height_);
+        image_scaled_proc_.SetAspectRatio(width_, height_);
+
         // Start a new worker thread.
-        m_WorkerThread = new std::thread(
+        m_WorkerThread = new thread(
           [this]
           {
             m_Worker.do_work(this, m_UvcMode, m_UvcCamera, m_device_node_string, m_vid, m_pid, m_enumerated_width, m_enumerated_height, m_actual_width, m_actual_height);
           });
     }
 
-    std::ostringstream ostr;
+    ostringstream ostr;
     if (m_UvcMode == UVC_MODE_LIBUSB) {
         m_UvcMode = UVC_MODE_V4L2;
         ostr << "UVC_MODE_V4L2\n";
@@ -252,7 +353,7 @@ void RenderUI::on_shift_up_button_clicked()
 
 void RenderUI::on_scaling_button_clicked()
 {
-  std::ostringstream ostr;
+  ostringstream ostr;
 
     switch (m_scaling) {
     case SCALE_MODE_NONE:
@@ -313,31 +414,56 @@ void RenderUI::update_widgets()
                 m_ButtonScaling.show();
                 m_ButtonShiftDown.show();
                 m_ButtonShiftUp.show();
+            } else if (m_UvcCamera ==UVC_CAMERA_LOGITECH_WEBCAM) {
+                m_ButtonScaling.show();
             }
             accum_index = 0;
             accum = 0;
         }
     }
 
-    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb = Gdk::Pixbuf::create_from_data(g_rgb_buffer, Gdk::COLORSPACE_RGB, FALSE, 8, width_, height_, width_*3);
+    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(g_rgb_buffer, Gdk::COLORSPACE_RGB, FALSE, 8, width_, height_, width_*3);
+    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_proc = Gdk::Pixbuf::create_from_data(g_rgb_buffer, Gdk::COLORSPACE_RGB, FALSE, 8, width_, height_, width_*3);
+
+    int image_src_render_width_ =  image_scaled_src_.GetImageWidth();
+    int image_src_render_height_ =  image_scaled_src_.GetImageHeight();
+
+    int image_proc_render_width_ =  image_scaled_proc_.GetImageWidth();
+    int image_proc_render_height_ =  image_scaled_proc_.GetImageHeight();
 
     if (m_UvcCamera == UVC_CAMERA_MVIS_LIDAR) {
         switch (m_scaling) {
             case SCALE_MODE_NEAREST:
-                m_ImageScaled.set(pixbuf_rgb->scale_simple(1200, 720, Gdk::INTERP_NEAREST));
+                image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_NEAREST));
+                image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_NEAREST));
                 break;
             case SCALE_MODE_BILINEAR:
-                m_ImageScaled.set(pixbuf_rgb->scale_simple(1200, 720, Gdk::INTERP_BILINEAR));
+                image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_BILINEAR));
+                image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_BILINEAR));
                 break;    
             case SCALE_MODE_NONE:
-                default:
-                m_ImageScaled.set(pixbuf_rgb);
+            default:
+                image_src_.set(pixbuf_rgb_src);
+                image_proc_.set(pixbuf_rgb_proc);
                 break;
             }
         } else if (m_UvcCamera == UVC_CAMERA_LOGITECH_WEBCAM) {
-        // from yuyv webcam
-        m_ImageScaled.set(pixbuf_rgb);
-    }
+            switch (m_scaling) {
+                case SCALE_MODE_NEAREST:
+                    image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_NEAREST));
+                    image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_NEAREST));
+                    break;
+                case SCALE_MODE_BILINEAR:
+                    image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_BILINEAR));
+                    image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_BILINEAR));
+                    break;    
+                case SCALE_MODE_NONE:
+                    default:
+                    image_src_.set(pixbuf_rgb_src);
+                    image_proc_.set(pixbuf_rgb_proc);
+                    break;
+                }
+        }
 
   // TODO mutex
   if (m_update_scroll_view) {
