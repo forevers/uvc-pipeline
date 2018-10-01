@@ -1,6 +1,8 @@
-# Camer OpenCV Pipeline
+# Camera OpenCV Pipeline
 
 This repository contains the **Camera_OpenCV_Pipeline** Android Studio project. It contains JNI and Java source to construct a multi-stage pipeline to acquire video frames delivered by a platform or external UVC compliant camera, perform processing on them and render the results to Android 2D and 3D Surface Views.
+
+[![Watch the video]](https://www.youtube.com/watch?v=0gUOx5ktNkA&feature=youtu.be)
 
 
 # Architecture
