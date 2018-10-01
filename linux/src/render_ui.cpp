@@ -432,38 +432,46 @@ void RenderUI::update_widgets()
     int image_proc_render_height_ =  image_scaled_proc_.GetImageHeight();
 
     if (m_UvcCamera == UVC_CAMERA_MVIS_LIDAR) {
+
         switch (m_scaling) {
-            case SCALE_MODE_NEAREST:
-                image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_NEAREST));
-                image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_NEAREST));
-                break;
-            case SCALE_MODE_BILINEAR:
-                image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_BILINEAR));
-                image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_BILINEAR));
-                break;    
-            case SCALE_MODE_NONE:
-            default:
-                image_src_.set(pixbuf_rgb_src);
-                image_proc_.set(pixbuf_rgb_proc);
-                break;
-            }
-        } else if (m_UvcCamera == UVC_CAMERA_LOGITECH_WEBCAM) {
-            switch (m_scaling) {
-                case SCALE_MODE_NEAREST:
-                    image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_NEAREST));
-                    image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_NEAREST));
-                    break;
-                case SCALE_MODE_BILINEAR:
-                    image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_BILINEAR));
-                    image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_BILINEAR));
-                    break;    
-                case SCALE_MODE_NONE:
-                    default:
-                    image_src_.set(pixbuf_rgb_src);
-                    image_proc_.set(pixbuf_rgb_proc);
-                    break;
-                }
+        case SCALE_MODE_NEAREST:
+            image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_NEAREST));
+            image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_NEAREST));
+            break;
+        case SCALE_MODE_BILINEAR:
+            image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_, Gdk::INTERP_BILINEAR));
+            image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_, Gdk::INTERP_BILINEAR));
+            break;    
+        case SCALE_MODE_NONE:
+        default:
+            image_src_.set(pixbuf_rgb_src);
+            image_proc_.set(pixbuf_rgb_proc);
+            break;
         }
+
+    } else if (m_UvcCamera == UVC_CAMERA_LOGITECH_WEBCAM) {
+
+        switch (m_scaling) {
+        case SCALE_MODE_NEAREST:
+            image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_NEAREST));
+            image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_NEAREST));
+            break;
+        case SCALE_MODE_BILINEAR:
+            image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_BILINEAR));
+            image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_BILINEAR));
+            break;    
+        case SCALE_MODE_NONE:
+        default:
+            image_src_.set(pixbuf_rgb_src);
+            image_proc_.set(pixbuf_rgb_proc);
+            break;
+        }
+
+        // explicit render of image residing in event boxed scrolled window
+        event_box_src_.queue_draw();
+        event_box_proc_.queue_draw();
+
+    }
 
   // TODO mutex
   if (m_update_scroll_view) {
