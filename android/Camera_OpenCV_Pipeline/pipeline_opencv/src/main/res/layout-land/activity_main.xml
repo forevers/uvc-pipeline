@@ -1,0 +1,183 @@
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    tools:context="com.ess.webcam_pipeline.Pipeline2ViewActivity">
+
+    <android.support.constraint.Barrier
+        android:id="@+id/barrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="camera_button,version,camera_enumeration"
+        app:layout_constraintTop_toTopOf="parent"
+        />
+
+    <ImageButton
+        android:id="@+id/camera_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="8dp"
+        android:background="@android:color/black"
+        android:contentDescription="string/camera"
+        android:src="@drawable/ic_videocam_white_48dp"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/usb_metadata"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:layout_constraintBottom_creator="1"
+        tools:layout_constraintLeft_creator="1"
+        tools:layout_constraintTop_creator="1"
+        />
+
+    <TextView
+        android:id="@+id/version"
+        android:layout_width="148dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="4dp"
+        android:background="@android:color/black"
+        android:text="version info ..."
+        android:textColor="@android:color/darker_gray"
+        android:textSize="8sp"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="spread"
+        />
+
+    <TextView
+        android:id="@+id/uvc_mode"
+        android:layout_width="148dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="4dp"
+        android:background="@android:color/black"
+        android:text="enumeration info ..."
+        android:textColor="@android:color/darker_gray"
+        android:textSize="8sp"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/version"
+        app:layout_constraintVertical_chainStyle="spread"
+        />
+
+    <ScrollView
+        android:id="@+id/camera_metadata_scroll"
+        android:layout_width="148dp"
+        android:layout_height="0dp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="4dp"
+        android:scrollbars="vertical"
+        android:textColor="@android:color/darker_gray"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintRight_toLeftOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/camera_enumeration">
+
+        <TextView
+            android:id="@+id/camera_metadata"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="99999"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="8sp" />
+    </ScrollView>
+
+    <!--when camera_surface_view_2 is gone, barrier bottom is incorrect ... need to get this barrier to work -->
+    <Space
+        android:id="@+id/top_space"
+        android:layout_width="wrap_content"
+        android:layout_height="80dp"
+        app:layout_constraintEnd_toStartOf="@id/camera_metadata_scroll"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        />
+
+    <android.support.constraint.Barrier
+        android:id="@+id/barrier_views"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/camera_metadata_scroll"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="camera_surface_view_1,camera_surface_view_2"
+        tools:layout_editor_absoluteX="16dp"
+        />
+
+    <SurfaceView
+        android:id="@+id/camera_surface_view_1"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:padding="8dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_space"
+        app:layout_constraintDimensionRatio="w,16:9"
+        app:layout_constraintEnd_toStartOf="@+id/camera_surface_view_2"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/top_space"
+        app:layout_constraintVertical_chainStyle="spread"
+        />
+
+    <TextView
+        android:id="@+id/overlay_view_1"
+        android:layout_width="100dp"
+        android:layout_height="20dp"
+        android:layout_margin="8dp"
+        android:textColor="@android:color/white"
+        android:textSize="8sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@+id/camera_surface_view_1"
+        app:layout_constraintTop_toTopOf="@+id/camera_surface_view_1"
+        />
+
+    <SurfaceView
+        android:id="@+id/camera_surface_view_2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:padding="8dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_space"
+        app:layout_constraintDimensionRatio="w,16:9"
+        app:layout_constraintEnd_toStartOf="@+id/camera_metadata_scroll"
+        app:layout_constraintStart_toEndOf="@+id/camera_surface_view_1"
+        app:layout_constraintTop_toBottomOf="@+id/top_space" />
+
+    <TextView
+        android:id="@+id/overlay_view_2"
+        android:layout_width="100dp"
+        android:layout_height="20dp"
+        android:layout_margin="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginTop="8dp"
+        android:textColor="@android:color/white"
+        android:textSize="8sp"
+        android:visibility="gone"
+        app:layout_constraintLeft_toLeftOf="@+id/camera_surface_view_2"
+        app:layout_constraintTop_toTopOf="@+id/camera_surface_view_2"
+        />
+
+    <Space
+        android:id="@+id/bottom_space"
+        android:layout_width="0dp"
+        android:layout_height="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/camera_metadata_scroll"
+        app:layout_constraintStart_toStartOf="parent"
+        />
+
+</android.support.constraint.ConstraintLayout>

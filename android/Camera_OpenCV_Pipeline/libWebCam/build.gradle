@@ -1,0 +1,80 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 25
+    defaultConfig {
+        minSdkVersion 15
+        targetSdkVersion 25
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        // TODO create opencv library list for various targets ... this eliminantes mips64/libtegra_hal.a error
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments '-DBUILD_TESTING=OFF','-DANDROID_TOOLCHAIN=gcc'
+                cppFlags "-std=c++14"
+                //cppFlags += "-DUSE_STL"
+                // boost bcp to extract boost circular_buffer
+                //cppFlags += "-DUSE_BOOST"
+                cppFlags += "-I" + file("src/main/cpp").absolutePath
+                // disable exceptions and use client callback in its place
+                cppFlags += "-DBOOST_EXCEPTION_DISABLE"
+                cppFlags += "-DBOOST_NO_EXCEPTIONS"
+                // for rapidjason
+                cppFlags += "-I" + file("src/main/cpp/rapidjson").absolutePath
+                // for libusb
+                cppFlags += "-DACCESS_RAW_DESCRIPTORS"
+
+                cFlags += "-DACCESS_RAW_DESCRIPTORS"
+
+                // gcc instead of clang
+                arguments '-DANDROID_TOOLCHAIN=gcc'
+
+                // for opencv shared library usage
+                //+ abiFilters 'arm64-v8a'
+            }
+        }
+    }
+    // for opencv shared lib
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/opencv_native_lib']
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            debuggable true
+            jniDebuggable true
+        }
+        debug {
+            debuggable true
+            jniDebuggable true
+            minifyEnabled false
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.support:appcompat-v7:25.+'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.0-beta4'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+
+allprojects {
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:deprecation"
+    }
+}
