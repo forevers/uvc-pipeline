@@ -28,18 +28,18 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 
 ## Build Environment
 
-- Ubuntu 14.04 64 bit.
-- Android Studio 3.1.4
+- Ubuntu 16.04 64 bit.
+- Android Studio 3.2.1
 -    File -> Settings -> Build, Execution, Deployment -> Compiler set Command-line Options: to --debug --stacktrace
-- Gradle version 4.4
-- OpenCV 3.4.0 Android libraries
-	- opencv-3.4.0-android-sdk.zip or https://github.com/opencv/opencv/tree/3.4.0
+- Gradle version 4.6
+- OpenCV 3.4.3 Android libraries
+	- opencv-3.4.3-android-sdk.zip or https://github.com/opencv/opencv/tree/3.4.3
 
 ### Build Instructions
 - Obtain Android Studio project from this site. 
 - Download latest OpenCV SDK for Android from OpenCV.org and decompress the zip file.
 - in libWebCam/src/main/cpp create symlink to OpenCV library
-	- ln -sfn <path to /OpenCV-android-sdk/sdk/native> opencv\_3\_4\_0\_native
+	- ln -sfn <path to /OpenCV-android-sdk/sdk/native> opencv\_3\_4\_3\_native
 
 
 ## Supported Devices
