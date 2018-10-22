@@ -1,20 +1,17 @@
 #include "uvc_worker.h"
-// TODO remove cyclic once interfaces are defined
-#include "render_ui.h"
+#include "frame_access_ifc.h"
 
 #include <iostream>
 #include <sstream>
 #include <chrono>
 
-extern int uvc_init(RenderUI* caller, UvcCamera uvc_camera, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+extern int uvc_init(IFrameAccess* frame_access_ifc, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 extern int uvc_exit();
 
-extern int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+extern int uvc_v4l2_init(IFrameAccess* frame_access_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 extern int uvc_v4l2_get_frame(void);
 extern int uvc_v4l2_exit();
 
-// extern unsigned char g_rgb_buffer[WIDTH*3*HEIGHT];
-extern unsigned char* g_rgb_buffer;
 
 ExampleWorker::ExampleWorker() :
     m_Mutex(),
@@ -48,6 +45,7 @@ void ExampleWorker::stop_work()
     LOG("stop_work() exit\n");
 }
 
+
 bool ExampleWorker::has_stopped() const
 {
     std::lock_guard<std::mutex> lock(m_Mutex);
@@ -55,7 +53,7 @@ bool ExampleWorker::has_stopped() const
 }
 
 
-void ExampleWorker::do_work(RenderUI* caller, UvcMode uvc_mode, UvcCamera uvc_camera, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height)
+void ExampleWorker::do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height)
 {
     LOG("do_work() entry\n");
 
@@ -66,16 +64,18 @@ void ExampleWorker::do_work(RenderUI* caller, UvcMode uvc_mode, UvcCamera uvc_ca
     }
 
     if (uvc_mode == UVC_MODE_LIBUSB) {
-        uvc_init(caller, uvc_camera, vid, pid, enumerated_width, enumerated_height, actual_width, actual_height);
+        LOG("LIBUSB streaming\n");
+        uvc_init(frame_access_ifc, vid, pid, enumerated_width, enumerated_height, actual_width, actual_height);
     } else {
-        if (0 != uvc_v4l2_init(caller, uvc_camera, device_node_string, enumerated_width, enumerated_height, actual_width, actual_height)) {
+        LOG("V4L2 streaming\n");
+        if (0 != uvc_v4l2_init(frame_access_ifc, device_node_string, enumerated_width, enumerated_height, actual_width, actual_height)) {
             LOG("%d > uvc_v4l2_init() failure\n", __LINE__);
             return;
         }
     }
 
     while (!m_shall_stop) {
-        
+
         if (uvc_mode == UVC_MODE_LIBUSB) {
 
           //std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -103,7 +103,7 @@ void ExampleWorker::do_work(RenderUI* caller, UvcMode uvc_mode, UvcCamera uvc_ca
               break;
             }
 
-          caller->notify();
+          frame_access_ifc->Signal();
         }
     }
 
@@ -118,5 +118,5 @@ void ExampleWorker::do_work(RenderUI* caller, UvcMode uvc_mode, UvcCamera uvc_ca
         m_has_stopped = true;
     }
 
-    caller->notify();
+    frame_access_ifc->Signal();
 }

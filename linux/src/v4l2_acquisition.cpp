@@ -15,6 +15,7 @@ extern "C"
     #include <linux/videodev2.h>
 }
 
+#include "frame_access_ifc.h"
 #include "render_ui.h"
 
 static inline unsigned char sat(int i) {
@@ -45,15 +46,11 @@ static inline unsigned char sat(int i) {
 #define IYUYV2RGB_8(pyuv, prgb) IYUYV2RGB_4(pyuv, prgb); IYUYV2RGB_4(pyuv + 8, prgb + 12);
 #define IYUYV2RGB_4(pyuv, prgb) IYUYV2RGB_2(pyuv, prgb); IYUYV2RGB_2(pyuv + 4, prgb + 6);
 
-extern unsigned char* g_rgb_buffer;
-
-static RenderUI* g_caller = NULL;
-
-static UvcCamera uvc_camera_ = UVC_CAMERA_NONE;
+static IFrameAccess* frame_access_ifc_ = nullptr;
 
 static int g_shift = 4;
 
-extern CameraConfig camera_config[NUM_UVC_CAMERA];
+extern CameraConfig camera_config;
 
 //#define DEBUG
 #if defined(DEBUG) 
@@ -1092,7 +1089,7 @@ static int video_prepare_capture(struct device *dev, int nbufs, unsigned int off
 
 static struct device dev;
 
-int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
+int uvc_v4l2_init(IFrameAccess* frame_access_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
 
     // struct device dev;
     int ret;
@@ -1123,9 +1120,7 @@ int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_nod
     enum buffer_fill_mode fill_mode = BUFFER_FILL_NONE;
     const char *filename = "frame-#.bin";
 
-    g_caller = caller;
-
-    uvc_camera_ = uvc_camera;
+    frame_access_ifc_ = frame_access_ifc;
 
     video_init(&dev);
 
@@ -1133,14 +1128,7 @@ int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_nod
 
     std::string f_optarg;
     // fourcc
-    if (uvc_camera_ == UVC_CAMERA_MVIS_LIDAR) {
-        // char f_optarg[] = "RGB24";
-        //f_optarg= "RGB24";
-        f_optarg = "YUYV";
-    } else if (uvc_camera_ == UVC_CAMERA_LOGITECH_WEBCAM) {
-        // char f_optarg[] = "YUYV";
-        f_optarg = "YUYV";
-    }
+    f_optarg = "YUYV";
 
     info = v4l2_format_by_name(f_optarg.c_str());
     if (info == NULL) {
@@ -1155,7 +1143,6 @@ int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_nod
     // number of v4l2 buffers in kernel queue
     nbufs = 4;
     if (nbufs > V4L_BUFFERS_MAX) nbufs = V4L_BUFFERS_MAX;
-
 
     // video device node
     if (!video_has_fd(&dev)) {
@@ -1215,12 +1202,6 @@ int uvc_v4l2_init(RenderUI* caller, UvcCamera uvc_camera, std::string device_nod
         return 1;
     }
 
-    // allocate single buffer
-    if (g_rgb_buffer != nullptr) delete [] g_rgb_buffer;
-
-    int buffer_size = camera_config[uvc_camera_].width_actual*3*camera_config[uvc_camera_].height;
-    g_rgb_buffer = new unsigned char[buffer_size];
-
     /* Start streaming. */
     ret = video_enable(&dev, 1);
     if (ret < 0) {
@@ -1274,43 +1255,41 @@ int uvc_v4l2_get_frame(void) {
     // render image
     uint8_t* buffer = (uint8_t*)(dev.buffers[buf.index].mem[0]);
 
-    int width = camera_config[uvc_camera_].width_actual;
-    int height = camera_config[uvc_camera_].height;
-    int bytes_per_pixel = camera_config[uvc_camera_].bytes_per_pixel;
+    int width = camera_config.width_actual;
+    int height = camera_config.height;
+    int bytes_per_pixel = camera_config.bytes_per_pixel;
     int bytes_per_row = bytes_per_pixel * width;
 
-    if (uvc_camera_ == UVC_CAMERA_MVIS_LIDAR) {
-        for (int row = 0; row < height; row++) {
-            for (int col = 0; col < width; col++) {
+    // try libuvc macros
+    // uvc_error_t uvc_yuyv2rgb(uvc_frame_t *in, uvc_frame_t *out)
 
-                // uint16_t depth_val = buffer[row*bytes_per_row + bytes_per_pixel*col + 0] + (buffer[row*bytes_per_row + bytes_per_pixel*col + 1] << 8);
-                uint16_t amplitude_val = buffer[row*bytes_per_row + bytes_per_pixel*col + 2] + (buffer[row*bytes_per_row + bytes_per_pixel*col + 3] << 8);
+    uint8_t *pyuv = buffer;
+// TODO initally return yuv and decode in opencv module
+// allow client to request RGB formats later ...
+#if 1
+    // uint8_t *prgb = g_rgb_buffer; 
+    IFrameAccess::Frame frame = frame_access_ifc_->GetFrame();
+    uint8_t* yuyv_buffer = frame.buffer;
+    width = dev.width;
+    height = dev.height;
 
-                // TODO demux module to split depth/amplitude into 2 frame field streams
-                // uint8_t shifted_depth_val = depth_val >> 1;
-                uint8_t shifted_amplitude_val = amplitude_val >> g_shift;
+    memcpy(yuyv_buffer, pyuv, width*height*2);
+#else
+    uint8_t *prgb = g_rgb_buffer; 
+    width = frame.frame_size.width;
+    height = frame.frame_size.height;
+    // TODO allocation units for stride
 
-                g_rgb_buffer[row*3*width + 3*col] = shifted_amplitude_val;
-                g_rgb_buffer[row*3*width + 3*col + 1] = shifted_amplitude_val;
-                g_rgb_buffer[row*3*width + 3*col + 2] = shifted_amplitude_val;
-            }
-        }
-    } else if (uvc_camera_ == UVC_CAMERA_LOGITECH_WEBCAM) {
-        // try libusb macros
-        // uvc_error_t uvc_yuyv2rgb(uvc_frame_t *in, uvc_frame_t *out)
+    //uint8_t *prgb_end = prgb + out->data_bytes;
+    uint8_t *prgb_end = prgb + (width*3*height);//out->data_bytes;
 
-        uint8_t *pyuv = buffer;
-        uint8_t *prgb = g_rgb_buffer;
-        //uint8_t *prgb_end = prgb + out->data_bytes;
-        uint8_t *prgb_end = prgb + (width*3*height);//out->data_bytes;
+    while (prgb < prgb_end) {
+        IYUYV2RGB_8(pyuv, prgb);
 
-        while (prgb < prgb_end) {
-            IYUYV2RGB_8(pyuv, prgb);
-
-            prgb += 3 * 8;
-            pyuv += 2 * 8;
-        }
+        prgb += 3 * 8;
+        pyuv += 2 * 8;
     }
+#endif
 
     buffer_fill_mode fill_mode = BUFFER_FILL_NONE;
     ret = video_queue_buffer(&dev, buf.index, fill_mode);

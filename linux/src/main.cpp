@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[])
 {
-    auto app = Gtk::Application::create(argc, argv, "webcamera_application");
+    auto app = Gtk::Application::create(argc, argv);
 
     RenderUI render_ui;
 

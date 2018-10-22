@@ -4,7 +4,13 @@
 # https://codereview.stackexchange.com/questions/2547/makefile-dependency-generation/11109#11109
 # https://stackoverflow.com/questions/38368531/create-dependency-files-in-makefile
 
-SRCS = ./src/main.cpp ./src/uvc_worker.cpp ./src/render_ui.cpp ./src/libuvc_acquisition.cpp ./src/v4l2_acquisition.cpp ./src/image_scaled.cpp
+SRCS = ./src/main.cpp 
+SRCS += ./src/uvc_worker.cpp 
+SRCS += ./src/render_ui.cpp
+SRCS += ./src/libuvc_acquisition.cpp
+SRCS += ./src/v4l2_acquisition.cpp 
+SRCS += ./src/image_scaled.cpp
+
 OBJS = $(SRCS:.cpp=.o)
 
 # dependency file list
@@ -25,7 +31,7 @@ LD := g++
 all: $(PRODUCT)
 
 clean:
-	$(RM) $(DEPS) $(OBJS) $(TARGET)
+	$(RM) $(DEPS) $(OBJS) $(PRODUCT) $(DEPS)
 
 # dependency rule
 %.d: %.cpp

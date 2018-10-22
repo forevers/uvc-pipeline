@@ -15,9 +15,7 @@ ImageScaled::ImageScaled() :
     // only show scrollbars when necessary
     set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
 
-    set_has_window(false);
-    set_redraw_on_allocate(false);
-    set_redraw_on_allocate(true);
+    set_has_window(true);
 }
 
 

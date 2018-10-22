@@ -5,10 +5,9 @@
 #include <thread>
 #include <mutex>
 
+#include "frame_access_ifc.h"
 #include "pipeline.h"
 
-//#include "render_ui.h"
-// TODO remove cyclic once interfaces are defined
 class RenderUI;
 
 class ExampleWorker
@@ -17,7 +16,7 @@ public:
     ExampleWorker();
 
     // Thread function.
-    void do_work(RenderUI* caller, UvcMode uvc_mode, UvcCamera uvc_camera, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+    void do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 
     void get_data(double* fraction_done, Glib::ustring* message) const;
     void stop_work();

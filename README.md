@@ -104,3 +104,9 @@ build project
 $ cd ../..
 $ make
 ```
+
+# TODO
+- linux app : consistent scaling of controls when streaming and not streaming
+- linux/android apps : video source api consistent for android/linux ... enumerate yuyv and rgb output modes
+- linux app : enuerate video modes during start streaming
+- linux : udev for usb

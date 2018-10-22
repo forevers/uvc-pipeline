@@ -7,13 +7,6 @@ enum UvcMode {
     NUM_UVC_MODE,
 };
 
-enum UvcCamera {
-    UVC_CAMERA_LOGITECH_WEBCAM,
-    UVC_CAMERA_MVIS_LIDAR,
-    NUM_UVC_CAMERA,
-    UVC_CAMERA_NONE,
-};
-
 struct CameraConfig {
     int bytes_per_pixel;
     int width_enumerated;
