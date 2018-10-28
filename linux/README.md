@@ -3,6 +3,7 @@ UVC capture, processing, and rendering pipelines for Android and Linux platforms
 
 # platform configuration
 
+## package installation
 update package list and installed packages
 ```console
 $ sudo apt-get update
@@ -49,6 +50,15 @@ $ sudo apt-get install -y gedit
 $ sudo apt-get install -y aptitude
 $ sudo apt-get install -y synaptic
 ```
+## debugger configuration
+
+- Eclipse SimRel 2018‑09
+- create a new workspace
+- right click new "Project..."" - > "C/C++ Project" -> "Makefile Project with Existing Code"
+- select "Linux GCC"
+- override default location with the linux "project" directory
+- right click project to select Properties -> "C/C++ Build" and uncheck "Use default build command"
+- right click project "index" -> rebuild
 
 # camera interogation
 each camera creates a media device node and video device node
