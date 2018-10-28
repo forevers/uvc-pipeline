@@ -19,7 +19,7 @@ extern CameraConfig camera_config;
 
 void cb(uvc_frame_t *frame, void *ptr) {
 
-// TODO initally return yuv and decode in opencv module
+// TODO initially return yuv and decode in opencv module
 // allow client to request RGB formats later ...
 #if 1
     IFrameAccess::Frame client_frame = frame_access_ifc_->GetFrame();

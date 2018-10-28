@@ -20,6 +20,10 @@ void set_widget_margin(Gtk::Widget& widget, int margin)
 }
 
 RenderUI::RenderUI() :
+	frame_width_(0), frame_height_(0),
+	enumerated_width_(0), enumerated_height_(0),
+	actual_width_(0), actual_height_(0),
+	vid_(0), pid_(0),
     interior_border_(5),
     widget_margin_(5),
     full_screen_(false),
@@ -202,7 +206,7 @@ bool RenderUI::on_key_press_event(GdkEventKey* key_event)
                 cout << "GDK_KEY_Escape fullscreen()" << endl;
                 fullscreen();
             }
-
+            break;
         default:
             break;
     }
@@ -452,6 +456,7 @@ void RenderUI::on_scaling_button_clicked()
     case SCALE_MODE_BILINEAR:
         scaling_ = SCALE_MODE_NONE;
         ostr << "SCALE_MODE_NONE\n";
+        break;
     default:
         break;
     }

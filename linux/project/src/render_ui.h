@@ -49,7 +49,7 @@ private:
 
     ScaleMode scaling_;
 
-    // screend and main window sizes
+    // screen and main window sizes
     int screen_width_, screen_height_;
     int window_width_, window_height_;
     int frame_width_, frame_height_;
