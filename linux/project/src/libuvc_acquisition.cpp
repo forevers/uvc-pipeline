@@ -22,9 +22,10 @@ void cb(uvc_frame_t *frame, void *ptr) {
 // TODO initially return yuv and decode in opencv module
 // allow client to request RGB formats later ...
 #if 1
-    IFrameQueue::Frame client_frame = frame_queue_ifc_->GetFrame();
+    CameraFrame client_frame = frame_queue_ifc_->GetFrame();
 
-    memcpy(client_frame.buffer, frame->data, frame->data_bytes);
+    memcpy(client_frame.data, frame->data, frame->data_bytes);
+
     frame_queue_ifc_->Signal();
 #else
     uvc_error_t ret;

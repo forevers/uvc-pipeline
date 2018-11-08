@@ -47,16 +47,27 @@ RenderUI::RenderUI() :
     worker_thread_(nullptr),
     mutex_()
 {
-    uvc_frame_size_.width = 0;
-    uvc_frame_size_.height = 0;
-    uvc_frame_size_.allocation_units = 0;
-    uvc_frame_.frame_size = uvc_frame_size_;
-    uvc_frame_.buffer = nullptr;
+    uvc_frame_.data = nullptr;
+    uvc_frame_.data_bytes = 0;
+    uvc_frame_.actual_bytes = 0;
+    uvc_frame_.width = 0;
+    uvc_frame_.height = 0;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
 
-    rgb_frame_.frame_size.width = 0;
-    rgb_frame_.frame_size.height = 0;
-    rgb_frame_.frame_size.allocation_units = 0;
-    rgb_frame_.buffer = nullptr;
+    rgb_frame_.data = nullptr;
+    rgb_frame_.data_bytes = 0;
+    rgb_frame_.actual_bytes = 0;
+    rgb_frame_.width = 0;
+    rgb_frame_.height = 0;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
 
     set_title("UVC Camera OpenCV Demo");
 
@@ -163,17 +174,34 @@ RenderUI::RenderUI() :
 
 RenderUI::~RenderUI()
 {
-    if (uvc_frame_.buffer != nullptr) {
-        delete [] uvc_frame_.buffer;
-        uvc_frame_.buffer != nullptr;
+	if (uvc_frame_.data != nullptr) {
+        delete [] uvc_frame_.data;
+        uvc_frame_.data != nullptr;
     }
-    uvc_frame_.frame_size.width = uvc_frame_.frame_size.width = uvc_frame_.frame_size.allocation_units = 0;
+    uvc_frame_.data_bytes = 0;
+    uvc_frame_.actual_bytes = 0;
+    uvc_frame_.width = 0;
+    uvc_frame_.height = 0;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
 
-    if (rgb_frame_.buffer != nullptr) {
-        delete [] rgb_frame_.buffer;
-        rgb_frame_.buffer == nullptr;
+    if (rgb_frame_.data != nullptr) {
+        delete [] rgb_frame_.data;
+        rgb_frame_.data == nullptr;
     }
-    rgb_frame_.frame_size.width = rgb_frame_.frame_size.width = rgb_frame_.frame_size.allocation_units = 0;
+    rgb_frame_.data = nullptr;
+    rgb_frame_.data_bytes = 0;
+    rgb_frame_.actual_bytes = 0;
+    rgb_frame_.width = 0;
+    rgb_frame_.height = 0;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
 }
 
 
@@ -372,22 +400,27 @@ void RenderUI::StartStream()
 
     ShowUI();
 
-    uvc_frame_size_.width = frame_width_;
-    uvc_frame_size_.height = frame_height_;
-    // TODO enumerate video mode the same as android app
-    // assume yuyv for now and used opencv for color space xform
-    // 2 bytes per yuyv sample pixel
-    uvc_frame_size_.allocation_units = 2 * frame_width_ * frame_height_;
-    // uvc_frame_size_.allocation_units = 4 * frame_width_ * frame_height_;
-    uvc_frame_.frame_size = uvc_frame_size_;
+    uvc_frame_.data_bytes = 2 * frame_width_ * frame_height_;
+    uvc_frame_.actual_bytes = 2 * frame_width_ * frame_height_;
+    uvc_frame_.width = frame_width_;
+    uvc_frame_.height = frame_height_;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
+    uvc_frame_.data = new uint8_t[uvc_frame_.data_bytes];
 
-    uvc_frame_.buffer = new uint8_t[uvc_frame_.frame_size.allocation_units];
-
-    rgb_frame_.frame_size.width = uvc_frame_.frame_size.width;
-    rgb_frame_.frame_size.height = uvc_frame_.frame_size.height;
-    rgb_frame_.frame_size.allocation_units = 3 * uvc_frame_.frame_size.width * uvc_frame_.frame_size.height;
-
-    rgb_frame_.buffer = new uint8_t[rgb_frame_.frame_size.allocation_units];
+    rgb_frame_.data_bytes = 3 * frame_width_ * frame_height_;
+    rgb_frame_.actual_bytes = 3 * frame_width_ * frame_height_;
+    rgb_frame_.width = frame_width_;
+    rgb_frame_.height = frame_height_;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
+    rgb_frame_.data = new uint8_t[rgb_frame_.data_bytes];
 
     // Start a new worker thread.
     worker_thread_ = new thread(
@@ -506,8 +539,8 @@ void RenderUI::update_widgets()
         }
     }
 
-    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(rgb_frame_.buffer, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_.frame_size.width, rgb_frame_.frame_size.height, rgb_frame_.frame_size.width*3);
-    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_proc = Gdk::Pixbuf::create_from_data(rgb_frame_.buffer, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_.frame_size.width, rgb_frame_.frame_size.height, rgb_frame_.frame_size.width*3);
+    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(rgb_frame_.data, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_.width, rgb_frame_.height, rgb_frame_.width*3);
+    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_proc = Gdk::Pixbuf::create_from_data(rgb_frame_.data, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_.width, rgb_frame_.height, rgb_frame_.width*3);
 
     int image_src_render_width_ =  image_scaled_src_.GetImageWidth();
     int image_src_render_height_ =  image_scaled_src_.GetImageHeight();
@@ -626,7 +659,7 @@ void RenderUI::on_notification_from_worker_thread()
             LOG("(worker_thread_ && worker_.has_stopped()) == true\n");
 
             // fill frames with null
-            memset(rgb_frame_.buffer, 0, rgb_frame_.frame_size.allocation_units);
+            memset(rgb_frame_.data, 0, rgb_frame_.data_bytes);
 
             update_widgets();
             // Work is done.
@@ -641,11 +674,12 @@ void RenderUI::on_notification_from_worker_thread()
 
             // utilize libuvc yuv->rgb library
 
-            uint8_t *pyuv = uvc_frame_.buffer;
+            uint8_t *pyuv = uvc_frame_.data;
 
-            int width = rgb_frame_.frame_size.width;
-            int height = rgb_frame_.frame_size.height;
-            uint8_t* prgb = rgb_frame_.buffer;
+            int width = rgb_frame_.width;
+            int height = rgb_frame_.height;
+            uint8_t* prgb = rgb_frame_.data;
+
             // TODO allocation units for stride
             uint8_t *prgb_end = prgb + (width*3*height);
 
@@ -662,7 +696,7 @@ void RenderUI::on_notification_from_worker_thread()
 }
 
 
-IFrameQueue::Frame RenderUI::GetFrame(void)
+CameraFrame RenderUI::GetFrame(void)
 {
     mutex_.lock();
 

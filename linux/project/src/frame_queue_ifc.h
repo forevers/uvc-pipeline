@@ -3,21 +3,11 @@
 
 #include <memory>
 
+#include "webcam_include.h"
 
 class IFrameQueue {
 
 public:
-
-    struct FrameSize {
-        size_t width;
-        size_t height;
-        size_t allocation_units;
-    };
-
-    struct Frame {
-        uint8_t* buffer;
-        FrameSize frame_size;
-    };
 
     virtual ~IFrameQueue() {};
 
@@ -25,7 +15,8 @@ public:
 
     //virtual CameraError GetFrameDescription(CameraFormat* camera_format, int* height, int* width) = 0;
 
-    virtual Frame GetFrame(void) = 0;
+    // virtual Frame GetFrame(void) = 0;
+    virtual CameraFrame GetFrame(void) = 0;
 
     //virtual void ReleaseFrame(CameraFrame* camera_frame) = 0;
 

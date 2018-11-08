@@ -1268,8 +1268,8 @@ int uvc_v4l2_get_frame(void) {
 // allow client to request RGB formats later ...
 #if 1
     // uint8_t *prgb = g_rgb_buffer; 
-    IFrameQueue::Frame frame = frame_queue_ifc_->GetFrame();
-    uint8_t* yuyv_buffer = frame.buffer;
+    CameraFrame frame = frame_queue_ifc_->GetFrame();
+    uint8_t* yuyv_buffer = frame.data;
     width = dev.width;
     height = dev.height;
 

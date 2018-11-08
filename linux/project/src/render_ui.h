@@ -45,19 +45,13 @@ public:
 
     // IFrameQueue impl
     void Signal() override;
-    Frame GetFrame(void) override;
+    CameraFrame GetFrame(void) override;
 
 private:
 
-    struct RGB8Frame {
-        uint8_t* buffer;
-        FrameSize frame_size;
-    };
+    CameraFrame uvc_frame_;
 
-    Frame uvc_frame_;
-    FrameSize uvc_frame_size_;
-
-    RGB8Frame rgb_frame_;
+    CameraFrame rgb_frame_;
     //unsigned char* g_rgb_buffer = nullptr;
 
     bool on_key_press_event(GdkEventKey* event) override;

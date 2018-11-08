@@ -21,6 +21,7 @@ PRODUCT := uvc_pipeline
 CC := g++
 
 C_INCLUDES = -I./libuvc/include -I./libuvc/build/include `pkg-config --cflags-only-I libusb-1.0` -I./src -I./src/include
+C_INCLUDES += -I../../android/Camera_OpenCV_Pipeline/libWebCam/src/main/cpp/camera_pipeline_modules/webcam_include
 PTHREAD =-pthread
 CFLAGS    := 
 CPPFLAGS := $(DEBUG) $(OPT) $(WARN) $(PTHREAD) -std=c++11 -pipe `pkg-config gtkmm-3.0 --cflags` -DPULL_MODEL

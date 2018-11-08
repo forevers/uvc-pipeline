@@ -1,12 +1,8 @@
 #ifndef WEBCAM_INCLUDE_H
 #define WEBCAM_INCLUDE_H
 
-#include <cstdlib>
 #include <sys/time.h>
 #include <stdint.h>
-#include <utility>
-
-#include "stddef.h"
 
 typedef enum camera_error {
     CAMERA_SUCCESS,
@@ -30,6 +26,8 @@ typedef enum camera_frame_format {
     CAMERA_FRAME_FORMAT_GRAY_8 = 4,
     CAMERA_FRAME_FORMAT_GRAY_16 = 5,
     CAMERA_FRAME_FORMAT_BM22 = 6,
+
+    CAMERA_FRAME_FORMAT_RGB = 7,
 
     /** Number of formats understood */
     CAMERA_FRAME_FORMAT_COUNT,
