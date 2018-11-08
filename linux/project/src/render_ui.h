@@ -3,13 +3,28 @@
 
 #include <gtkmm.h>
 
-#include "frame_access_ifc.h"
+#include "frame_queue_ifc.h"
 #include "image_scaled.h"
 #include "uvc_worker.h"
 #include "pipeline.h"
 
+// https://github.com/GNOME/gtkmm/blob/master/demos/gtk-demo/example_glarea.cc
 
-class RenderUI : public Gtk::Window, IFrameAccess
+// enum {
+//   X_AXIS,
+//   Y_AXIS,
+//   Z_AXIS,
+
+//   N_AXIS
+// };
+
+// static const GLfloat vertex_data[] = {
+//   0.f,   0.5f,   0.f, 1.f,
+//   0.5f, -0.366f, 0.f, 1.f,
+//  -0.5f, -0.366f, 0.f, 1.f,
+// };
+
+class RenderUI : public Gtk::Window, IFrameQueue
 {
 public:
 
@@ -28,7 +43,7 @@ public:
         NUM_SCALE_MODE,
     };
 
-    // IFrameTransferIfc impl
+    // IFrameQueue impl
     void Signal() override;
     Frame GetFrame(void) override;
 
@@ -88,16 +103,22 @@ private:
     void on_notification_from_worker_thread();
 
     // layout
+    
     // top level vertical box
     Gtk::Box vertical_box_;
+    
     // banner label
     Gtk::Label banner_;
+    
     // auto-scaling image windows
     Gtk::EventBox event_box_src_;
     Gtk::EventBox event_box_proc_;
     Gtk::HBox video_box_;
     ImageScaled image_scaled_src_;
     ImageScaled image_scaled_proc_;
+
+    Gtk::GLArea gl_area_;
+
     // buttons and fps label
     Gtk::ButtonBox button_box_;
     Gtk::Button button_start_stop_;

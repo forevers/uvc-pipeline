@@ -5,7 +5,7 @@
 #include <thread>
 #include <mutex>
 
-#include "frame_access_ifc.h"
+#include "frame_queue_ifc.h"
 #include "pipeline.h"
 
 class RenderUI;
@@ -16,7 +16,7 @@ public:
     ExampleWorker();
 
     // Thread function.
-    void do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+    void do_work(IFrameQueue* frame_queue_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 
     void get_data(double* fraction_done, Glib::ustring* message) const;
     void stop_work();

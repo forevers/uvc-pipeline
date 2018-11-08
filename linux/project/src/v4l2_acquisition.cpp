@@ -15,7 +15,7 @@ extern "C"
     #include <linux/videodev2.h>
 }
 
-#include "frame_access_ifc.h"
+#include "frame_queue_ifc.h"
 #include "render_ui.h"
 
 static inline unsigned char sat(int i) {
@@ -46,7 +46,7 @@ static inline unsigned char sat(int i) {
 #define IYUYV2RGB_8(pyuv, prgb) IYUYV2RGB_4(pyuv, prgb); IYUYV2RGB_4(pyuv + 8, prgb + 12);
 #define IYUYV2RGB_4(pyuv, prgb) IYUYV2RGB_2(pyuv, prgb); IYUYV2RGB_2(pyuv + 4, prgb + 6);
 
-static IFrameAccess* frame_access_ifc_ = nullptr;
+static IFrameQueue* frame_queue_ifc_ = nullptr;
 
 static int g_shift = 4;
 
@@ -1089,7 +1089,7 @@ static int video_prepare_capture(struct device *dev, int nbufs, unsigned int off
 
 static struct device dev;
 
-int uvc_v4l2_init(IFrameAccess* frame_access_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
+int uvc_v4l2_init(IFrameQueue* frame_queue_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
 
     // struct device dev;
     int ret;
@@ -1120,7 +1120,7 @@ int uvc_v4l2_init(IFrameAccess* frame_access_ifc, std::string device_node, int e
     enum buffer_fill_mode fill_mode = BUFFER_FILL_NONE;
     const char *filename = "frame-#.bin";
 
-    frame_access_ifc_ = frame_access_ifc;
+    frame_queue_ifc_ = frame_queue_ifc;
 
     video_init(&dev);
 
@@ -1268,7 +1268,7 @@ int uvc_v4l2_get_frame(void) {
 // allow client to request RGB formats later ...
 #if 1
     // uint8_t *prgb = g_rgb_buffer; 
-    IFrameAccess::Frame frame = frame_access_ifc_->GetFrame();
+    IFrameQueue::Frame frame = frame_queue_ifc_->GetFrame();
     uint8_t* yuyv_buffer = frame.buffer;
     width = dev.width;
     height = dev.height;

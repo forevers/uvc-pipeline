@@ -1,10 +1,10 @@
-#ifndef FRAME_ACCESS_IFC_H
-#define FRAME_ACCESS_IFC_H
+#ifndef FRAME_QUEUE_IFC_H
+#define FRAME_QUEUE_IFC_H
 
 #include <memory>
 
 
-class IFrameAccess {
+class IFrameQueue {
 
 public:
 
@@ -19,7 +19,7 @@ public:
         FrameSize frame_size;
     };
 
-    virtual ~IFrameAccess() {};
+    virtual ~IFrameQueue() {};
 
     virtual void Signal() = 0;
 

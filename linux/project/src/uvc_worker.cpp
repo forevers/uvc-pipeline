@@ -1,14 +1,14 @@
 #include "uvc_worker.h"
-#include "frame_access_ifc.h"
+#include "frame_queue_ifc.h"
 
 #include <iostream>
 #include <sstream>
 #include <chrono>
 
-extern int uvc_init(IFrameAccess* frame_access_ifc, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+extern int uvc_init(IFrameQueue* frame_queue_ifc, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 extern int uvc_exit();
 
-extern int uvc_v4l2_init(IFrameAccess* frame_access_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
+extern int uvc_v4l2_init(IFrameQueue* frame_queue_ifc, std::string device_node, int enumerated_width, int enumerated_height, int actual_width, int actual_height);
 extern int uvc_v4l2_get_frame(void);
 extern int uvc_v4l2_exit();
 
@@ -53,7 +53,7 @@ bool ExampleWorker::has_stopped() const
 }
 
 
-void ExampleWorker::do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height)
+void ExampleWorker::do_work(IFrameQueue* frame_queue_ifc, UvcMode uvc_mode, std::string device_node_string, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height)
 {
     LOG("do_work() entry\n");
 
@@ -65,10 +65,10 @@ void ExampleWorker::do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, st
 
     if (uvc_mode == UVC_MODE_LIBUSB) {
         LOG("LIBUSB streaming\n");
-        uvc_init(frame_access_ifc, vid, pid, enumerated_width, enumerated_height, actual_width, actual_height);
+        uvc_init(frame_queue_ifc, vid, pid, enumerated_width, enumerated_height, actual_width, actual_height);
     } else {
         LOG("V4L2 streaming\n");
-        if (0 != uvc_v4l2_init(frame_access_ifc, device_node_string, enumerated_width, enumerated_height, actual_width, actual_height)) {
+        if (0 != uvc_v4l2_init(frame_queue_ifc, device_node_string, enumerated_width, enumerated_height, actual_width, actual_height)) {
             LOG("%d > uvc_v4l2_init() failure\n", __LINE__);
             return;
         }
@@ -103,7 +103,7 @@ void ExampleWorker::do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, st
               break;
             }
 
-          frame_access_ifc->Signal();
+          frame_queue_ifc->Signal();
         }
     }
 
@@ -118,5 +118,5 @@ void ExampleWorker::do_work(IFrameAccess* frame_access_ifc, UvcMode uvc_mode, st
         m_has_stopped = true;
     }
 
-    frame_access_ifc->Signal();
+    frame_queue_ifc->Signal();
 }

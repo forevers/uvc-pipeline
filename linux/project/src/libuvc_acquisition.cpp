@@ -7,13 +7,13 @@ extern "C" {
 
 // TODO abstract/encapsulate CameraConfig
 #include "render_ui.h"
-#include "frame_access_ifc.h"
+#include "frame_queue_ifc.h"
 
 static int unsigned width_, height_;
 
 static int unsigned bytes_per_pixel_;
 static int unsigned bytes_per_row_;
-static IFrameAccess* frame_access_ifc_;
+static IFrameQueue* frame_queue_ifc_;
 
 extern CameraConfig camera_config;
 
@@ -22,10 +22,10 @@ void cb(uvc_frame_t *frame, void *ptr) {
 // TODO initially return yuv and decode in opencv module
 // allow client to request RGB formats later ...
 #if 1
-    IFrameAccess::Frame client_frame = frame_access_ifc_->GetFrame();
+    IFrameQueue::Frame client_frame = frame_queue_ifc_->GetFrame();
 
     memcpy(client_frame.buffer, frame->data, frame->data_bytes);
-    frame_access_ifc_->Signal();
+    frame_queue_ifc_->Signal();
 #else
     uvc_error_t ret;
     uvc_frame_t *rgb;
@@ -53,7 +53,7 @@ static uvc_device_t *dev = NULL;
 static uvc_device_handle_t *devh = NULL;
 
 
-int uvc_init(IFrameAccess* frame_access_ifc, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
+int uvc_init(IFrameQueue* frame_queue_ifc, int vid, int pid, int enumerated_width, int enumerated_height, int actual_width, int actual_height) {
 
     uvc_error_t res;
     uvc_stream_ctrl_t ctrl;
@@ -68,7 +68,7 @@ int uvc_init(IFrameAccess* frame_access_ifc, int vid, int pid, int enumerated_wi
     LOG("vid : %x, pid : %x, enumerated_width : %d, enumerated_height : %d\n",
         vid, pid, enumerated_width, enumerated_height);
 
-    frame_access_ifc_ = frame_access_ifc;
+    frame_queue_ifc_ = frame_queue_ifc;
 
     res = uvc_init(&ctx, NULL);
 

@@ -23,7 +23,7 @@ CC := g++
 C_INCLUDES = -I./libuvc/include -I./libuvc/build/include `pkg-config --cflags-only-I libusb-1.0` -I./src -I./src/include
 PTHREAD =-pthread
 CFLAGS    := 
-CPPFLAGS := $(DEBUG) $(OPT) $(WARN) $(PTHREAD) -std=c++11 -pipe `pkg-config gtkmm-3.0 --cflags`
+CPPFLAGS := $(DEBUG) $(OPT) $(WARN) $(PTHREAD) -std=c++11 -pipe `pkg-config gtkmm-3.0 --cflags` -DPULL_MODEL
 GTKLIB =`pkg-config --cflags --libs gtk+-3.0` `pkg-config gtkmm-3.0 --libs`
 LDFLAGS := $(PTHREAD) $(GTKLIB) -export-dynamic -Wl,-R./libuvc/build -L./libuvc/build -luvc
 LD := g++

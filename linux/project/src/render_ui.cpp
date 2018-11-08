@@ -662,7 +662,7 @@ void RenderUI::on_notification_from_worker_thread()
 }
 
 
-IFrameAccess::Frame RenderUI::GetFrame(void)
+IFrameQueue::Frame RenderUI::GetFrame(void)
 {
     mutex_.lock();
 
