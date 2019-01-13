@@ -80,10 +80,6 @@ yavta frame capture from campera n
 ```console
 $ ./yavta -s120x720 --buffer-size 345600 -c2 -n4 -F./image#.raw /dev/video<n>
 ```
-python script to deinterlace raw yavta created images and call imagemagic png creator
-```console
-$ python2 parse_raw_frames.py
-```
 
 # uvc-pipeline app build instructions
 
