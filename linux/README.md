@@ -85,7 +85,7 @@ $ ./yavta -s120x720 --buffer-size 345600 -c2 -n4 -F./image#.raw /dev/video<n>
 
 clone the repos and submodules
 ```console
-$ git clone --recursive-submodules https://github.com/forevers/uvc-pipeline.git
+$ git clone --recurse-submodules https://github.com/forevers/uvc-pipeline.git
 $ cd uvc-pipeline/linux/libuvc
 ```
 or
