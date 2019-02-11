@@ -92,7 +92,7 @@ or
 
 ```console
 $ git clone https://github.com/forevers/uvc-pipeline.git
-$ cd uvc-pipeline/linux/libuvc
+$ cd uvc-pipeline/linux/project/libuvc
 $ git submodule init
 $ git submodule update
 ```
