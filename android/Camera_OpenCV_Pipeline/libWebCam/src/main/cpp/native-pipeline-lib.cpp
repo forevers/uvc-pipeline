@@ -60,9 +60,7 @@ static jlong nativeCameraCreate(JNIEnv *env, jobject thiz) {
 
     camera_ = new WebCam();
 
-    setField_long(env, thiz, "nativePtr", reinterpret_cast<jlong>(camera_));
-
-
+    //setField_long(env, thiz, "nativePtr_", reinterpret_cast<jlong>(camera_));
     RETURN_(MAIN_TAG, reinterpret_cast<jlong>(camera_), jlong);
 }
 

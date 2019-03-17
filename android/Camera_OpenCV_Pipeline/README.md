@@ -26,6 +26,9 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 ## Camera Pipeline Application
 **Camera Pipeline** is an Android application which constructs and controls a pipeline composed of a Camera source, an Opencv processing stage, and a Renderer applied to the output of the Opencv stage.
 
+## Pipeline Layout
+![Pipeline Image](https://github.com/forevers/uvc-pipeline/tree/master/android/images/pipeline.png "Pipeline Image"). 
+
 ## Build Environment
 
 - Ubuntu 16.04 64 bit.
