@@ -27,7 +27,12 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 **Camera Pipeline** is an Android application which constructs and controls a pipeline composed of a Camera source, an Opencv processing stage, and a Renderer applied to the output of the Opencv stage.
 
 ## Pipeline Layout
+
+- Below is a high-level layout of the pipeline and abstraction stack :
 ![Pipeline Image](https://github.com/forevers/uvc-pipeline/blob/master/android/images/pipeline.png "Pipeline Image"). 
+
+- Below is a sequence description of the pipeline contruction and destruction and the native level :
+![Pipeline Construct Destruct Image](https://github.com/forevers/uvc-pipeline/blob/master/android/images/pipeline_construct_destruct.png "Pipeline Construction and Destruction Image"). 
 
 ## Build Environment
 
