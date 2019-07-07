@@ -32,8 +32,7 @@ set(camera_source_dir "src/main/cpp/camera_pipeline_modules")
 
 # shared opencv library https://sourceforge.net/projects/opencvlibrary/files/opencv-android/
 add_library(lib_opencv SHARED IMPORTED)
-#set_target_properties(lib_opencv PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs/${ANDROID_ABI}/libopencv_java3.so)
-set_target_properties(lib_opencv PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/src/main/opencv_native_lib/${ANDROID_ABI}/libopencv_java3.so)
+set_target_properties(lib_opencv PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/opencv_native_lib/${ANDROID_ABI}/libopencv_java3.so)
 
 include_directories($project.projectDir.toString()
 
@@ -64,8 +63,7 @@ include_directories($project.projectDir.toString()
                     "${camera_source_dir}/opencv/include"
 
                     # opencv libraries
-                    #"${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs/../jni/include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/src/main/opencv_native_lib/../jni/include"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/opencv_native_lib/../jni/include"
 
                     "src/main/cpp"
                     )

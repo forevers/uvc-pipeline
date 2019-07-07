@@ -25,9 +25,8 @@ typedef enum camera_frame_format {
     /** Raw grayscale images */
     CAMERA_FRAME_FORMAT_GRAY_8 = 4,
     CAMERA_FRAME_FORMAT_GRAY_16 = 5,
-    CAMERA_FRAME_FORMAT_BM22 = 6,
 
-    CAMERA_FRAME_FORMAT_RGB = 7,
+    CAMERA_FRAME_FORMAT_RGB = 6,
 
     /** Number of formats understood */
     CAMERA_FRAME_FORMAT_COUNT,

@@ -25,7 +25,8 @@ static int fixed_size_deque_x[DEQUE_SIZE];
 static int fixed_size_deque_y[DEQUE_SIZE];
 
 
-OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height, uint8_t channel_shift) :
+OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height) :
+
         request_width_(width),
         request_height_(height),
         is_running_(false),
@@ -33,8 +34,7 @@ OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height, ui
         frame_output_(nullptr),
         client_owns_buffer_(false),
         processing_mode_(ProcessingMode::PROCESSING_MODE_NONE),
-        ball_tracker_state_(BALL_TRACKER_INIT),
-        channel_shift_(channel_shift)
+        ball_tracker_state_(BALL_TRACKER_INIT)
 {
     ENTER_(OPENCV_TAG);
 
@@ -265,26 +265,6 @@ cv::Mat OpenCV::ProcessDemo(CameraFrame* camera_frame) {
                     if (fixed_size_deque_index == DEQUE_SIZE) fixed_size_deque_index = 0;
                 }
 
-            } else if (camera_frame->frame_format == CAMERA_FRAME_FORMAT_BM22) {
-
-                /* TODO
-                 * This is a method to extract lower 8 bits of grayscale from one of the fields
-                 * I doubt this is accelerated in any fashion
-                 */
-                cv::Mat_<uint16_t> frame_depth = cv::Mat(camera_frame->height, 2 * camera_frame->width, CV_16UC1, camera_frame->data);
-                cv::Mat_<uint16_t> frame_amplitude = cv::Mat(camera_frame->height, 2 * camera_frame->width, CV_16UC1, camera_frame->data+2);
-
-                cv::resize(frame_depth, frame_out, cv::Size(camera_frame->width, camera_frame->height), 0, 0, cv::INTER_NEAREST);
-                cv::resize(frame_amplitude, frame_out, cv::Size(camera_frame->width, camera_frame->height), 0, 0, cv::INTER_NEAREST);
-
-                // prior to output, select byte range of interest for downstream client
-                int shift = channel_shift_;
-                frame_out.forEach<uint16_t>([shift](uint16_t &pixel, const int position[]) -> void {
-                    pixel = pixel >> shift;
-                });
-                frame_out.convertTo(frame_out, CV_8UC1);
-
-                cv::cvtColor(frame_out, frame_out, cv::COLOR_GRAY2RGBA);
             }
 
             // return frame
@@ -343,25 +323,6 @@ int OpenCV::CycleProcessingMode() {
     }
 
     RETURN_(OPENCV_TAG, CAMERA_SUCCESS, int);
-}
-
-
-int OpenCV::ScaleIfGray16(bool downscale) {
-    ENTER_(RENDERER_TAG);
-
-    if (downscale) {
-        if (channel_shift_ > 0) {
-            channel_shift_--;
-        }
-    } else {
-        if (channel_shift_ < 8) {
-            channel_shift_++;
-        }
-    }
-
-    LOGI_(RENDERER_TAG, "current shift scaling : %d", channel_shift_);
-
-    RETURN_(RENDERER_TAG, channel_shift_, int);
 }
 
 

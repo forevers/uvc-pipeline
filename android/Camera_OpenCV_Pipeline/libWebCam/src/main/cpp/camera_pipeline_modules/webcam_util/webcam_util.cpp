@@ -42,7 +42,6 @@ int get_bytes_per_pixel(CameraFormat camera_format) {
     switch (camera_format) {
         case CAMERA_FRAME_FORMAT_YUYV:
             return 2;
-        case CAMERA_FRAME_FORMAT_BM22:
         case CAMERA_FRAME_FORMAT_RGBX:
             return 4;
         case CAMERA_FRAME_FORMAT_GRAY_8:

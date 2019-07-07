@@ -25,20 +25,18 @@ class OpenCV : public IOpenCVControl, public IFrameAccessRegistration, public IC
 
 public:
 
-    OpenCV(IFrameAccessRegistration* frame_access, int width, int height, uint8_t channel_shift);
+    OpenCV(IFrameAccessRegistration* frame_access, int width, int height);
 
     ~OpenCV();
 
     // IOpenCVControl methods
     virtual CameraError Prepare();
-//    std::string Version() override;
     void Version() override;
     IFrameAccessRegistration* GetFrameAccessIfc(int interface_number) override;
     int Start() override;
     void ConfigProcessingMode(IOpenCVControl::ProcessingMode demo_mode) override;
     int Stop() override;
     int CycleProcessingMode() override;
-    int ScaleIfGray16(bool downscale) override;
 
     // IFrameAccessRegistration methods
     FrameAccessSharedPtr RegisterClient(void) override;
@@ -61,8 +59,6 @@ private:
 
     // render window size
     int request_width_, request_height_;
-
-    uint8_t channel_shift_;
 
     pthread_t thread_;
 

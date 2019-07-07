@@ -1,5 +1,7 @@
 package com.ess.webcam;
 
+import com.ess.util.UsbMonitor;
+
 /**
  * Interface providing camera component control access
  */
@@ -23,7 +25,7 @@ public interface ICamera {
      */
     public void stop();
 
-    public String prepare(final USBMonitor.UsbControlBlock ctrlBlock);
+    public String prepare(final UsbMonitor.UsbConnectionData connectionData);
 
     /**
      * Register json status callback

@@ -32,14 +32,15 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.ess.webcam.Camera;
 import com.ess.webcam.ICamera;
 import com.ess.webcam.IRenderer;
+import com.ess.webcam.IStatusCallback;
 import com.ess.webcam.Opencv;
 import com.ess.webcam.Renderer;
+
+import com.ess.util.UsbMonitor;
 import com.ess.utils.ThreadedHandler;
-import com.ess.webcam.Camera;
-import com.ess.webcam.USBMonitor;
-import com.ess.webcam.IStatusCallback;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -58,11 +59,14 @@ public class Pipeline2ViewActivity
         implements VideoModeDialogFragment.VideoModeDialogListener,
         FrameIntervalDialogFragment.FrameIntervalDialogListener {
 
+    /* programmatic constraint layout configuration */
     ConstraintSet constraintSet = new ConstraintSet();
 
+    /* pipeline module control interfaces */
     private ICamera camera = null;
     private Opencv opencv = null;
 
+    /* layout elements */
     ConstraintLayout constraintLayout;
     ViewTreeObserver viewTreeObserver;
     int constraintLayoutWidth;
@@ -70,22 +74,27 @@ public class Pipeline2ViewActivity
 
     String resolutionString;
 
+    /* screen sleep prevention control */
     boolean keepScreenOn = false;
 
     /* render surfaces */
     ArrayList<RenderSurface> renderSurfaceList;
 
+
     private class RenderSurface implements SurfaceHolder.Callback {
 
         public RenderSurface() {}
+
 
         @Override
         public void surfaceCreated(final SurfaceHolder holder) {
             if (DEBUG) Log.e(TAG, "surfaceCreated()");
         }
 
+
         @Override
         public void surfaceChanged(final SurfaceHolder holder, final int format, final int width, final int height) {
+
             if (DEBUG) Log.e(TAG, "surfaceChanged()");
 
             if ((width == 0) || (height == 0)) {
@@ -108,6 +117,7 @@ public class Pipeline2ViewActivity
             }
         }
 
+
         @Override
         public void surfaceDestroyed(final SurfaceHolder holder) {
             if (DEBUG) Log.e(TAG, "surfaceDestroyed()");
@@ -118,10 +128,6 @@ public class Pipeline2ViewActivity
 
         private SurfaceView cameraView;
         private Surface previewSurface;
-//        /* surface bound to jni */
-//        private boolean isPreview;
-
-        private int shift;
 
         /* overlay view text */
         private TextView overlayTextView;
@@ -154,7 +160,7 @@ public class Pipeline2ViewActivity
         int height;
         int defaultFrameInterval;
         int frameIntervalType;
-        List<Integer> intervals = new ArrayList<Integer>();
+        List<Integer> intervals = new ArrayList<>();
     }
 
     class NegotiatedResolution {
@@ -183,16 +189,12 @@ public class Pipeline2ViewActivity
     /* camera enumeration data */
     private TextView uvcMode;
 
-    // view overlay test
-    private TextView overlayView_1;
-
     /* JSON parser */
     private CameraStatusParser statusParser;
 
     private static final boolean DEBUG = true;
 
-    //    private static final String TAG = Pipeline2ViewActivity.class.getSimpleName();
-    private static final String TAG = "test";
+    private static final String TAG = Pipeline2ViewActivity.class.getSimpleName();
 
     /* camera sync object */
     private final Object pipelineSync = new Object();
@@ -203,15 +205,16 @@ public class Pipeline2ViewActivity
     private ThreadedHandler threadedHandler;
 
     /* USB monitor for attach/detach and permission management */
-    private USBMonitor usbMonitor;
+    private UsbMonitor usbMonitor;
 
     UsbManager usbManager = null;
 
-    private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
+    /* connected USB device */
     private static int vendorId;
     private static int productId;
     private UsbDevice usbDevice;
 
+    /* for creation of native file from asset file */
     public final int PERMISSIONS_REQUEST_SDCARD_ACCESS = 1;
 
     // TODO versioning in seperate class
@@ -221,13 +224,13 @@ public class Pipeline2ViewActivity
     String versionHash = "versionHash"; //BuildConfig.VERSIONHASHSHORT;
 
     RenderSurface renderSurface;
-//    RenderSurface renderSurfaceDepth;
-//    RenderSurface renderSurfaceAmplitude;
 
     private GestureDetectorCompat mDetector;
 
     class MyGestureListener extends GestureDetector.SimpleOnGestureListener {
+
         private static final String DEBUG_TAG = "Gestures";
+
 
         @Override
         public boolean onDown(MotionEvent event) {
@@ -235,13 +238,17 @@ public class Pipeline2ViewActivity
             return true;
         }
 
+
         @Override
         public boolean onSingleTapUp(MotionEvent event) {
             Log.d(DEBUG_TAG, "onSingleTapUp: " + event.toString());
 
             synchronized (pipelineSync) {
+
                 if (isActive && isPreview && (camera != null) && (renderSurface != null)) {
+
                     Log.e(TAG, "ACTION_DOWN");
+
                     float yAxisVal = event.getY();
                     int viewHeight = renderSurface.cameraView.getHeight();
                     if (yAxisVal < viewHeight / 3) {
@@ -263,19 +270,20 @@ public class Pipeline2ViewActivity
                     }
                 }
             }
+
             return true;
         }
 
+
         @Override
         public boolean onFling(MotionEvent event1, MotionEvent event2, float velocityX, float velocityY) {
+
             Log.d(TAG, "onFling: " + event1.toString() + event2.toString());
 
             synchronized (pipelineSync) {
                 if (isActive && isPreview && (camera != null) && (renderSurface != null)) {
                     if (Math.abs(velocityX) > Math.abs(velocityY)) {
                         boolean positiveVelocity = (velocityX > 0) ? true : false;
-                        int channel_scale = opencv.scaleChannelIfGray16(positiveVelocity);
-                        renderSurface.overlayTextView.setText("Depth [" + (7 + channel_scale) + ":" + channel_scale + "]");
                     }
                 }
             }
@@ -284,12 +292,14 @@ public class Pipeline2ViewActivity
         }
     }
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // hide status bar
+        /* hide status bar */
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         View decorView = getWindow().getDecorView();
         int uiOptions = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
@@ -319,6 +329,7 @@ public class Pipeline2ViewActivity
                 int action = event.getAction();
 
                 switch(action) {
+
                     case ACTION_DOWN:
                         touchHandled = true;
                         int visibility = Pipeline2ViewActivity.this.cameraMetadataScroll.getVisibility();
@@ -326,6 +337,7 @@ public class Pipeline2ViewActivity
                         Pipeline2ViewActivity.this.cameraMetadata.setVisibility((visibility == View.VISIBLE) ? View.GONE : View.VISIBLE);
 
                         break;
+
                     default:
                         break;
                 }
@@ -366,14 +378,15 @@ public class Pipeline2ViewActivity
         renderSurface.overlayTextView = (TextView)findViewById(R.id.overlay_view_1);
         renderSurface.overlayTextView.setText("Depth");
         renderSurface.overlayTextView.setVisibility(View.INVISIBLE);
-        renderSurface.shift = 0;
         renderSurfaceList.add(renderSurface);
 
         isPreview = false;
 
         viewTreeObserver.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+
             @Override
             public void onGlobalLayout() {
+
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) {
                     constraintLayout.getViewTreeObserver().removeGlobalOnLayoutListener(this);
                 } else {
@@ -388,11 +401,11 @@ public class Pipeline2ViewActivity
             threadedHandler = ThreadedHandler.createHandler();
         }
 
-        // usb detection
+        /* usb detection */
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        usbMonitor = new USBMonitor(this, onDeviceConnectListener);
+        usbMonitor = new UsbMonitor(this, onUsbDeviceConnectListener);
 
-        // obtain first USB of device registered in the device_filter.xml list
+        /* obtain first USB of device registered in the device_filter.xml list */
         usbDevice = usbMonitor.getDevice(this, R.xml.device_filter);
 
         if (usbDevice == null) {
@@ -403,7 +416,7 @@ public class Pipeline2ViewActivity
             Log.d(TAG, usbDevice.getDeviceName());
         }
 
-        // permission required for SDCARD access
+        /* permission required for SDCARD access */
         int permissionCheck = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
         if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -412,10 +425,12 @@ public class Pipeline2ViewActivity
         }
     }
 
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         return true;
     }
+
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -424,7 +439,6 @@ public class Pipeline2ViewActivity
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
             return true;
         }
@@ -432,9 +446,11 @@ public class Pipeline2ViewActivity
         return super.onOptionsItemSelected(item);
     }
 
-    // If the activity has already been created/instantiated, the ACTION_USB_DEVICE_ATTACHED event will arrive through the 'onNewIntent()' method:
+
+    /* If the activity has already been created/instantiated, the ACTION_USB_DEVICE_ATTACHED event will arrive through the 'onNewIntent()' method */
     @Override
     protected void onNewIntent(Intent intent) {
+
         if (DEBUG) Log.v(TAG, "onNewIntent() enter");
 
         super.onNewIntent(intent);
@@ -462,8 +478,10 @@ public class Pipeline2ViewActivity
         if (DEBUG) Log.v(TAG, "onNewIntent() exit");
     }
 
+
     @Override
     protected void onStart() {
+
         if (DEBUG) Log.v(TAG, "onStart:");
 
         super.onStart();
@@ -476,8 +494,7 @@ public class Pipeline2ViewActivity
 
                 camera.start();
                 opencv.start();
-//                opencvDepth.start();
-//                opencvAmplitude.start();
+
                 for (RenderSurface renderSurface : renderSurfaceList) {
                     if (renderSurface.renderer != null) {
                         renderSurface.renderer.start();
@@ -489,9 +506,10 @@ public class Pipeline2ViewActivity
 
     @Override
     protected void onStop() {
+
         if (DEBUG) Log.v(TAG, "onStop() entry");
 
-        // release native pipeline resources
+        /* release native pipeline resources */
         releaseCamera();
 
         synchronized (pipelineSync) {
@@ -542,6 +560,7 @@ public class Pipeline2ViewActivity
 
         super.onDestroy();
     }
+
 
     private class CameraStatusParser {
 
@@ -603,6 +622,7 @@ public class Pipeline2ViewActivity
 
     };
 
+
     private void TerminatePipeline() {
 
         synchronized (pipelineSync) {
@@ -614,8 +634,10 @@ public class Pipeline2ViewActivity
             }
 
             runOnUiThread(new Runnable() {
+
                 @Override
                 public void run() {
+
                     for (RenderSurface renderSurface : renderSurfaceList) {
                         renderSurface.overlayTextView.setVisibility(View.INVISIBLE);
                     }
@@ -638,9 +660,10 @@ public class Pipeline2ViewActivity
         }
     }
 
+
     /**
      * Keep screen on during camera render
-     * @parameter keepOn boolean indicating screen keep on state
+     * @parameter keepOn boolean indicates screen keep on state
      */
     private void ScreenControl(boolean keepOn) {
 
@@ -650,6 +673,7 @@ public class Pipeline2ViewActivity
 
             @Override
             public void run() {
+
                 if (keepScreenOn == true) {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 } else {
@@ -659,7 +683,8 @@ public class Pipeline2ViewActivity
         });
     }
 
-    private void SelectMode(final USBMonitor.UsbControlBlock ctrlBlock) {
+
+    private void SelectMode(final UsbMonitor.UsbConnectionData connectionData) {
 
         TerminatePipeline();
 
@@ -670,7 +695,7 @@ public class Pipeline2ViewActivity
 
                 camera = new Camera();
 
-                String sizes = camera.prepare(ctrlBlock);
+                String sizes = camera.prepare(connectionData);
                 Log.d(TAG, sizes);
                 try {
                     ScreenControl(true);
@@ -739,30 +764,19 @@ public class Pipeline2ViewActivity
         });
     }
 
-    boolean bm22Hijack = false;
 
     public void onModeSelected(VideoModeDialogFragment dialog) {
 
         Log.e(TAG, "call StartPreviewModal() here");
 
-//        // am i running on ui thread ?
-//        if (Looper.getMainLooper().getThread() == Thread.currentThread()) {
-//            Log.e(TAG, "running on ui thread");
-//        }
-
         int selected_mode = dialog.selectedMode;
         EnumeratedResolution mode = fourccMultiMap.get("YUY2").get(selected_mode);
         int bitsPerPixel = 2;
 
-        // steal the BM22 mode
-        if (vendorId == 1204 && productId == 249 && mode.width == 240 && mode.height == 720) {
-            bm22Hijack = true;
-            bitsPerPixel = 4;
-        }
         negotiatedResolution = new NegotiatedResolution(mode, selected_mode, Camera.CAMERA_FRAME_FORMAT_YUYV);
 
         if (negotiatedResolution.enumeratedResolution.frameIntervalType != 0) {
-            // select frame interval
+            /* select frame interval */
             FrameIntervalDialogFragment frag = FrameIntervalDialogFragment.newInstance(R.string.select_fps, negotiatedResolution.enumeratedResolution, bitsPerPixel);
             frag.show(getFragmentManager(), "dialog");
         } else {
@@ -770,17 +784,19 @@ public class Pipeline2ViewActivity
         }
     }
 
+
     public void onFrameIntervalSelected(FrameIntervalDialogFragment dialog) {
 
         negotiatedResolution.negotiatedFrameInterval = dialog.selectedFrameInterval;
         StartPreviewModal();
     }
 
+
     private void StartPreviewModal() {
 
         cameraButton.setImageResource(R.drawable.ic_videocam_off_white_48dp);
 
-        // allows async status platform callbacks
+        /* allows async status platform callbacks */
         // TODO best location for callback ???
         camera.setStatusCallback(new IStatusCallback() {
 
@@ -795,7 +811,7 @@ public class Pipeline2ViewActivity
 
             if (negotiatedResolution != null) {
 
-                // camera driver/stack image resolution and format
+                /* camera driver/stack image resolution and format */
                 int fps = 10000000/negotiatedResolution.negotiatedFrameInterval;
                 camera.setCaptureMode(negotiatedResolution.enumeratedResolution.width, negotiatedResolution.enumeratedResolution.height, fps, fps, negotiatedResolution.frameFormat);
 
@@ -842,28 +858,13 @@ public class Pipeline2ViewActivity
         }
 
         if (fourccMultiMap.containsKey("YUY2") &&
-                renderSurfaceList.get(0).previewSurface != null /*&&
-                renderSurfaceList.get(1).previewSurface != null */ ) {
+                renderSurfaceList.get(0).previewSurface != null) {
 
             // register opencv element on depth channel of first sensor
-            // BM22 override
             // TODO make this pid/vid driven
             int width_acquisition = negotiatedResolution.enumeratedResolution.width;
             int width_render = negotiatedResolution.enumeratedResolution.width;
-            if (bm22Hijack) {
-                width_acquisition = 120;
-                width_render = 1280;
-            }
-            opencv = new Opencv(camera.getFrameAccessIfc(0), negotiatedResolution.enumeratedResolution.height, width_acquisition, renderSurfaceList.get(0).shift);
-
-//            // register opencv element on depth channel of first sensor
-//            opencvDepth = new Opencv(demux.getFrameAccessIfc(0), negotiatedResolution.height, negotiatedResolution.width, TOF_SENSOR_1, TOF_CHANNEL_FORMAT_DEPTH);
-//
-//            // register opencv element on amplitude channel of second sensor
-//            opencvAmplitude = new Opencv(demux.getFrameAccessIfc(1), negotiatedResolution.height, negotiatedResolution.width, TOF_SENSOR_1, TOF_CHANNEL_FORMAT_AMPLITUDE);
-//
-//            renderSurfaceList.get(0).isPreview = true;
-//            renderSurfaceList.get(1).isPreview = true;
+            opencv = new Opencv(camera.getFrameAccessIfc(0), negotiatedResolution.enumeratedResolution.height, width_acquisition);
 
             RenderSurface surface;
 
@@ -871,7 +872,7 @@ public class Pipeline2ViewActivity
             surface = renderSurfaceList.get(0);
             surface.renderer = new Renderer(opencv.getFrameAccessIfc(0), negotiatedResolution.enumeratedResolution.height, width_acquisition);
             surface.renderer.setSurface(surface.previewSurface);
-            surface.overlayTextView.setText("Depth [" + (7+surface.shift) + ":" + surface.shift + "]");
+//            surface.overlayTextView.setText("...");
 
             // configure aspect ratio
             android.view.ViewGroup.LayoutParams lp = surface.cameraView.getLayoutParams();
@@ -880,23 +881,9 @@ public class Pipeline2ViewActivity
             constraintSet.setDimensionRatio(R.id.camera_surface_view_1, ar_string);
             constraintSet.applyTo(constraintLayout);
 
-//            // opencv depth rendering
-//            surface = renderSurfaceList.get(0);
-//            surface.renderer = new TofRenderer(opencvDepth.getFrameAccessIfc(0), negotiatedResolution.height, negotiatedResolution.width, surface.tofSensor, surface.tofChannelFormat, surface.shift);
-//            surface.renderer.setSurface(surface.previewSurface);
-//            surface.overlayTextView.setText("Depth [" + (7+surface.shift) + ":" + surface.shift + "]");
-//
-//            // opencv amplitude rendering
-//            surface = renderSurfaceList.get(1);
-//            surface.renderer = new TofRenderer(opencvAmplitude.getFrameAccessIfc(0), negotiatedResolution.height, negotiatedResolution.width, surface.tofSensor, surface.tofChannelFormat, surface.shift);
-//            surface.renderer.setSurface(surface.previewSurface);
-//            surface.overlayTextView.setText("Amplitude [" + (7+surface.shift) + ":" + surface.shift + "]");
-
             isActive = true;
             camera.start();
             opencv.start();
-//            opencvDepth.start();
-//            opencvAmplitude.start();
             for (RenderSurface renderSurface : renderSurfaceList) {
                 if (renderSurface.cameraView.getVisibility() == View.VISIBLE) {
                     if (renderSurface.renderer != null) {
@@ -913,10 +900,12 @@ public class Pipeline2ViewActivity
 
     }
 
-    private final USBMonitor.OnDeviceConnectListener onDeviceConnectListener = new USBMonitor.OnDeviceConnectListener() {
+
+    private final UsbMonitor.OnUsbDeviceConnectListener onUsbDeviceConnectListener = new UsbMonitor.OnUsbDeviceConnectListener() {
 
         @Override
         public void onAttach(final UsbDevice device) {
+
             if (DEBUG) Log.v(TAG, "onAttach()");
 
             Toast.makeText(Pipeline2ViewActivity.this, "USB_DEVICE_ATTACHED", Toast.LENGTH_SHORT).show();
@@ -940,37 +929,52 @@ public class Pipeline2ViewActivity
             }
         }
 
+
         @Override
         public void onDetach(final UsbDevice device) {
+
             if (DEBUG) Log.v(TAG, "onDetach()");
+
             Toast.makeText(Pipeline2ViewActivity.this, "USB_DEVICE_DETACHED", Toast.LENGTH_SHORT).show();
             releaseCamera();
             usbDevice = null;
         }
 
+
         @Override
-        public void onConnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock) {
+        public void onConnect(final UsbDevice device, final UsbMonitor.UsbConnectionData connectionData) {
+
             if (DEBUG) Log.v(TAG, "onConnect() entry");
 
             TerminatePipeline();
 
             postAsyncEvent(new Runnable() {
+
                 @Override
                 public void run() {
                     synchronized (pipelineSync) {
 
-                        SelectMode(ctrlBlock);
+                        // issued in onClick() handler
+                        //SelectMode(connectionData);
                     }
                 }
             }, 0);
 
+            if (DEBUG) Log.v(TAG, "onConnect() exit");
         }
 
+
         @Override
-        public void onDisconnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock) {
+        public void onDisconnect(final UsbDevice device, final UsbMonitor.UsbConnectionData connectionData) {
             if (DEBUG) Log.v(TAG, "onDisconnect()");
         }
+
+
+        @Override
+        public void onCancel(final UsbDevice device) {
+        }
     };
+
 
     private final View.OnClickListener onClickListener = new View.OnClickListener() {
 
@@ -979,13 +983,16 @@ public class Pipeline2ViewActivity
 
             synchronized (pipelineSync) {
 
+                Log.i(TAG, "onClick() entry");
+
                 if (usbDevice != null) {
 
                     if (isActive == true && isPreview == true) {
 
+                        Log.i(TAG, "isActive == true && isPreview == true");
+
                         releaseCamera();
                         for (RenderSurface renderSurface : renderSurfaceList) {
-//                            renderSurface.isPreview = false;
                             renderSurface.overlayTextView.setVisibility(View.INVISIBLE);
                         }
                         isActive = isPreview = false;
@@ -994,8 +1001,10 @@ public class Pipeline2ViewActivity
                             renderSurface.cameraView.setVisibility(View.VISIBLE);
                         }
 
-                    } else if (usbMonitor.requestPermission(usbDevice)) {
-                        // returns false if permissions not currently given and issues permission dialog
+                    } else if (usbMonitor.requestPermission(Pipeline2ViewActivity.this, usbDevice)) {
+                        /* returns false if permissions not currently given and issues permission dialog */
+
+                        Log.i(TAG, "has permission");
 
                         TerminatePipeline();
 
@@ -1005,9 +1014,8 @@ public class Pipeline2ViewActivity
 
                                 synchronized (pipelineSync) {
 
-                                    USBMonitor.UsbControlBlock ctrlBlock = usbMonitor.openDevice(usbDevice);
-
-                                    SelectMode(ctrlBlock);
+                                    UsbMonitor.UsbConnectionData connectionData = usbMonitor.openDevice(usbDevice);
+                                    SelectMode(connectionData);
                                 }
                             }
                         }, 0);
@@ -1016,11 +1024,15 @@ public class Pipeline2ViewActivity
                 } else {
                     releaseCamera();
                 }
+
+                Log.i(TAG, "onClick() exit");
             }
         }
     };
 
+
     private synchronized void releaseCamera() {
+
         if (DEBUG) Log.d(TAG, "releaseCamera() entry");
 
         cameraButton.setImageResource(R.drawable.ic_videocam_white_48dp);
@@ -1032,8 +1044,10 @@ public class Pipeline2ViewActivity
             ScreenControl(false);
 
             runOnUiThread(new Runnable() {
+
                 @Override
                 public void run() {
+
                     cameraMetadata.setText("");
                     uvcMode.setText("");
                     fourccMultiMap.clear();
@@ -1045,7 +1059,8 @@ public class Pipeline2ViewActivity
         if (DEBUG) Log.d(TAG, "releaseCamera() exit");
     }
 
-    // from UVCLib BaseActivity
+
+    /* from UVCLib BaseActivity */
     public final void runOnUiThread(final Runnable task, final long duration) {
         if (task == null) return;
         uiHandler.removeCallbacks(task);
@@ -1060,10 +1075,12 @@ public class Pipeline2ViewActivity
         }
     }
 
+
     public final void removeFromUiThread(final Runnable task) {
         if (task == null) return;
         uiHandler.removeCallbacks(task);
     }
+
 
     protected final synchronized void postAsyncEvent(final Runnable task, final long delayMillis) {
         if ((task == null) || (threadedHandler == null)) return;

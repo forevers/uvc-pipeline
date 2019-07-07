@@ -100,16 +100,9 @@ int WebcamFifo::SetFrameSize(int width, int height, int min_fps, int max_fps, Ca
             request_min_fps_ = min_fps;
             request_max_fps_ = max_fps;
             input_frame_mode_ = request_mode_ = camera_format;
-            if (request_width_ == 240 && request_height_ == 720) {
-                // hijack this YUYV mode as a BM22 mode
-                output_frame_mode_ = CAMERA_FRAME_FORMAT_BM22;
-                output_frame_width_ = 120;
-                output_frame_height_ = 720;
-            } else {
-                output_frame_mode_ = input_frame_mode_;
-                output_frame_width_ = input_frame_width_;
-                output_frame_height_ = input_frame_height_;
-            }
+            output_frame_mode_ = input_frame_mode_;
+            output_frame_width_ = input_frame_width_;
+            output_frame_height_ = input_frame_height_;
 
             LOGI_(TAG_WEBCAM_FIFO, "input_frame_mode_: %d", input_frame_mode_);
         }
@@ -224,20 +217,7 @@ CameraError copy_uvc_to_camera_frame(uvc_frame_t *in, CameraFrame *out) {
     switch (in->frame_format) {
         /** supported webcam formats */
         case UVC_FRAME_FORMAT_YUYV:
-            if (in->width == 240 && in->height == 720) {
-                // hijack this YUYV mode as a BM22 mode
-                out->frame_format = CAMERA_FRAME_FORMAT_BM22;
-                out->step = in->step;
-                out->sequence = in->sequence;
-                out->capture_time = in->capture_time;
-                out->width = in->width / 2;
-                out->height = in->height;
-                out->data_bytes = out->actual_bytes= in->actual_bytes;
-                memcpy(out->data, in->data, out->actual_bytes);
-                return ret;
-            } else {
-                out->frame_format = CAMERA_FRAME_FORMAT_YUYV;
-            }
+            out->frame_format = CAMERA_FRAME_FORMAT_YUYV;
             break;
         case UVC_FRAME_FORMAT_GRAY8:
             out->frame_format = CAMERA_FRAME_FORMAT_GRAY_8;

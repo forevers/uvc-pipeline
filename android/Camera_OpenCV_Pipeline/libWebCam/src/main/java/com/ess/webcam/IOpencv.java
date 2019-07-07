@@ -28,9 +28,4 @@ public interface IOpencv {
      */
     public void cycleProcessingMode();
 
-    /**
-     * scale gray16 to gray8
-     */
-    public int scaleChannelIfGray16(boolean downscale);
-
 }

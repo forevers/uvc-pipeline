@@ -31,7 +31,6 @@ public:
 
     virtual int CycleProcessingMode() = 0;
 
-    virtual int ScaleIfGray16(bool downscale) = 0;
 };
 
 #endif // OPENCV_CONTROL_IFC_H

@@ -3,7 +3,8 @@ package com.ess.webcam;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.ess.webcam.USBMonitor.UsbControlBlock;
+import com.ess.util.UsbMonitor;
+import com.ess.util.UsbMonitor.UsbConnectionData;
 
 /**
  * camera library provides access to native level libuvc library
@@ -11,8 +12,7 @@ import com.ess.webcam.USBMonitor.UsbControlBlock;
 public class Camera implements ICamera {
 
     private static final boolean DEBUG = true;
-//    private static final String TAG = Camera.class.getSimpleName();
-    private static final String TAG = "test";
+    private static final String TAG = Camera.class.getSimpleName();
 
     private static final String DEFAULT_USBFS = "/dev/bus/usb";
 
@@ -40,12 +40,8 @@ public class Camera implements ICamera {
      * 16 bit gray frame format
      */
     public static final int CAMERA_FRAME_FORMAT_GRAY_16 = 5;
-    /**
-     * grayscale 16bit 2 field frame format
-     */
-    public static final int CAMERA_FRAME_FORMAT_BM22 = 6;
 
-    private UsbControlBlock usbCtrlBlock;
+    private UsbConnectionData connectionData;
 
     /**
      * current camera frame format
@@ -88,19 +84,20 @@ public class Camera implements ICamera {
      * Prepare the camera libuvc stack
      * USB permission is necessary before this method is called
      *
-     * @param ctrlBlock
+     * @param connectionData
      */
-    public synchronized String prepare(final UsbControlBlock ctrlBlock) {
+    public synchronized String prepare(UsbMonitor.UsbConnectionData connectionData) {
 
         int result;
         try {
-            usbCtrlBlock = ctrlBlock.clone();
+            this.connectionData = connectionData;
+
             result = nativePrepare(nativePtr,
-                        usbCtrlBlock.getVenderId(), usbCtrlBlock.getProductId(),
-                        usbCtrlBlock.getFileDescriptor(),
-                        usbCtrlBlock.getBusNum(),
-                        usbCtrlBlock.getDevNum(),
-                        getUSBFSName(usbCtrlBlock));
+                    connectionData.getVenderId(), connectionData.getProductId(),
+                    connectionData.getFileDescriptor(),
+                    connectionData.getBusNum(),
+                    connectionData.getDevNum(),
+                    getUSBFSName(connectionData));
         } catch (final Exception e) {
             Log.w(TAG, e);
             result = -1;
@@ -129,7 +126,7 @@ public class Camera implements ICamera {
     // TODO auto-negotiate frame interval ?
 //    public void setCaptureMode(final int width, final int height, final int frameFormat) {
 //
-//        if (usbCtrlBlock != null) {
+//        if (usbConnectionData != null) {
 //            setCaptureMode(width, height, DEFAULT_UVC_PREVIEW_MIN_FPS, DEFAULT_UVC_PREVIEW_MAX_FPS, frameFormat);
 //        } else {
 //            throw new IllegalArgumentException("invalid control block");
@@ -156,29 +153,31 @@ public class Camera implements ICamera {
     }
 
     public synchronized void start() {
-        if (usbCtrlBlock != null) {
+        if (connectionData != null) {
             nativeStart(nativePtr);
         }
     }
 
     public synchronized void stop() {
 
-        if (usbCtrlBlock != null) {
+        if (connectionData != null) {
             nativeStop(nativePtr);
         }
 
-        if (usbCtrlBlock != null) {
-            usbCtrlBlock.close();
-            usbCtrlBlock = null;
+        if (connectionData != null) {
+            connectionData.close();
+            connectionData = null;
         }
 
         currentFrameFormat = -1;
         supportedVideoModes = null;
     }
 
-    private final String getUSBFSName(final UsbControlBlock ctrlBlock) {
+    private final String getUSBFSName(final UsbConnectionData connectionData) {
+
         String result = null;
-        final String name = ctrlBlock.getDeviceName();
+        final String name = connectionData.getDeviceName();
+
         final String[] v = !TextUtils.isEmpty(name) ? name.split("/") : null;
         if ((v != null) && (v.length > 2)) {
             final StringBuilder sb = new StringBuilder(v[0]);

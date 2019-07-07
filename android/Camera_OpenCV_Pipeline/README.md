@@ -78,6 +78,5 @@ Modified 3rd party files are :
 /libWebCam/src/main/cpp/UVCCamera_477aee8/libuvc/include/libuvc/libuvc_internal.h
 /libWebCam/src/main/cpp/UVCCamera_477aee8/libuvc/src/stream.c
 /libWebCam/src/main/cpp/UVCCamera_477aee8/localdefines.h
-/libWebCam/src/main/java/com/ess/webcam/USBMonitor.java
 
 See // libWebCam modification comments for changes.

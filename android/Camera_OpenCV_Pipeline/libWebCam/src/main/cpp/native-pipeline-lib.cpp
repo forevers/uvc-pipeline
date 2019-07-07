@@ -203,13 +203,14 @@ static jint nativeCameraStop(JNIEnv *env, jobject thiz,
 /** opencv interface **/
 
 static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
-                                long id_frame_access_handle, int height, int width, int shift) {
+                                long id_frame_access_handle, int height, int width) {
+
     ENTER_(MAIN_TAG);
 
     IFrameAccessRegistration* frame_access_registration = reinterpret_cast<IFrameAccessRegistration *>(id_frame_access_handle);
 
     OpenCV* opencv = nullptr;
-    opencv = new OpenCV(frame_access_registration, width, height, shift);
+    opencv = new OpenCV(frame_access_registration, width, height);
 
     RETURN_(MAIN_TAG, reinterpret_cast<jlong>(opencv), jlong);
 }
@@ -288,15 +289,6 @@ static jint nativeOpencvCycleProcessingMode(JNIEnv *env, jobject thiz,
     }
 
     RETURN_(MAIN_TAG, result, jint);
-}
-
-static jint nativeOpencvScaleIfGray16(JNIEnv *env, jobject thiz,
-                                      jlong id_opencv, jboolean downscale) {
-    ENTER_(MAIN_TAG);
-
-    IOpenCVControl* opencv_control = reinterpret_cast<OpenCV*>(id_opencv);
-
-    RETURN_(MAIN_TAG, opencv_control->ScaleIfGray16(downscale), jint);
 }
 
 
@@ -421,12 +413,11 @@ int register_camera(JNIEnv *env) {
 
 // opencv stage
 static JNINativeMethod methods_opencv[] = {
-    { "nativeCreate", "(JIII)J", (void *) nativeOpencvCreate },
+    { "nativeCreate", "(JII)J", (void *) nativeOpencvCreate },
     { "nativeGetFrameAccessIfc", "(JI)J", (void *) nativeOpencvGetFrameAccessIfc },
     { "nativeStart", "(J)I", (void *) nativeOpencvStart },
     { "nativeStop", "(J)I", (void *) nativeOpencvStop },
-    { "nativeCycleProcessingMode", "(J)I", (void *) nativeOpencvCycleProcessingMode },
-    { "nativeScaleIfGray16", "(JZ)I", (void *) nativeOpencvScaleIfGray16 },
+    { "nativeCycleProcessingMode", "(J)I", (void *) nativeOpencvCycleProcessingMode }
 
 };
 
