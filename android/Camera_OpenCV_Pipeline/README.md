@@ -2,8 +2,15 @@
 
 This repository contains the **Camera_OpenCV_Pipeline** Android Studio project. It contains JNI and Java source to construct a multi-stage pipeline to acquire video frames delivered by a platform or external UVC compliant camera, perform processing on them and render the results to Android 2D and 3D Surface Views.
 
-[![Watch the video]](https://www.youtube.com/watch?v=0gUOx5ktNkA&feature=youtu.be)
+Below are a few videos for ball tracking and face detection.
 
+Ball Tracking :
+
+[![Watch the video](https://img.youtube.com/vi/0gUOx5ktNkA/2.jpg)](https://www.youtube.com/watch?v=0gUOx5ktNkA&feature=youtu.be "ball tracking")
+
+Face Detection :
+
+[![Watch the video](https://img.youtube.com/vi/ygKc487v4tI/2.jpg)](https://www.youtube.com/watch?v=ygKc487v4tI&feature=youtu.be "face detection")
 
 # Architecture
 
@@ -53,7 +60,7 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 
 ## Supported Devices
 
-- Pixel XL
+- Pixel 3 XL
 
 ## License
 
