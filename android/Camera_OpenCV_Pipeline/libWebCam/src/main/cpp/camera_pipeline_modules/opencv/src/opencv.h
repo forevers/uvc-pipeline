@@ -25,7 +25,7 @@ class OpenCV : public IOpenCVControl, public IFrameAccessRegistration, public IC
 
 public:
 
-    OpenCV(IFrameAccessRegistration* frame_access, int width, int height);
+    OpenCV(IFrameAccessRegistration* frame_access, int width, int height, std::string face_classifier_filename);
 
     ~OpenCV();
 
@@ -88,8 +88,11 @@ private:
 
     ProcessingMode processing_mode_;
 
-    // opencv offset demo
+    // opencv ball tracking demo
     BallTrackerState ball_tracker_state_;
+
+    // opencv face detection demo
+    std::string face_classifier_filename;
 };
 
 #endif // OPENCV_H

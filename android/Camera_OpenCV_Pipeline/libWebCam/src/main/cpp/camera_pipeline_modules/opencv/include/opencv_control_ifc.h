@@ -12,6 +12,7 @@ public:
     enum class ProcessingMode {
         PROCESSING_MODE_NONE,
         PROCESSING_MODE_BALL_TRACKER,
+        PROCESSING_MODE_FACE_DETECT,
         PROCESSING_MODE_NUM
     };
 

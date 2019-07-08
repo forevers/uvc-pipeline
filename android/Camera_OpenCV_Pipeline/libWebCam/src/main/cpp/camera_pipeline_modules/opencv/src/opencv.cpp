@@ -25,7 +25,7 @@ static int fixed_size_deque_x[DEQUE_SIZE];
 static int fixed_size_deque_y[DEQUE_SIZE];
 
 
-OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height) :
+OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height, string face_classifier_filename) :
 
         request_width_(width),
         request_height_(height),
@@ -34,7 +34,8 @@ OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height) :
         frame_output_(nullptr),
         client_owns_buffer_(false),
         processing_mode_(ProcessingMode::PROCESSING_MODE_NONE),
-        ball_tracker_state_(BALL_TRACKER_INIT)
+        ball_tracker_state_(BALL_TRACKER_INIT),
+        face_classifier_filename(face_classifier_filename)
 {
     ENTER_(OPENCV_TAG);
 
@@ -151,9 +152,9 @@ int OpenCV::Start() {
 void OpenCV::ConfigProcessingMode(IOpenCVControl::ProcessingMode processing_mode) {
     ENTER_(OPENCV_TAG);
 
-    if (processing_mode != processing_mode) {
+    if (processing_mode_ != processing_mode) {
 
-        processing_mode = processing_mode;
+        processing_mode_ = processing_mode;
 
         switch (processing_mode) {
 
@@ -162,6 +163,9 @@ void OpenCV::ConfigProcessingMode(IOpenCVControl::ProcessingMode processing_mode
 
             case ProcessingMode::PROCESSING_MODE_BALL_TRACKER:
                 ball_tracker_state_ = BALL_TRACKER_INIT;
+                break;
+
+            case ProcessingMode::PROCESSING_MODE_FACE_DETECT:
                 break;
 
             default:
@@ -183,88 +187,139 @@ cv::Mat OpenCV::ProcessDemo(CameraFrame* camera_frame) {
 
             if (camera_frame->frame_format == CAMERA_FRAME_FORMAT_YUYV) {
 
-                // form frame from raw data buffer and color space xform from yuv to rgba
-                Mat frame(camera_frame->height, camera_frame->width, CV_8UC2, camera_frame->data);
-                cvtColor(frame, frame_out, COLOR_YUV2RGBA_YUY2);
+                if (true) {
+                    /*
+                     * A supervised cascade classifier based algorithm first developed by Paul Viola and Michael Jones. Originally based on Haar Wavelets,
+                     * this implementation now utilizes Diagonal Features and Local Binary Patterns. An opencv provided pre-trained face-recognition
+                     * file is used for classification.
+                     *
+                     * https://docs.opencv.org/trunk/db/d28/tutorial_cascade_classifier.html
+                     */
 
-                // perform video processing in huv color space
-                Mat centroids;
-                cvtColor(frame, centroids, COLOR_YUV2RGB_YUY2);
-                cvtColor(centroids, centroids, COLOR_RGB2HSV);
+                    /* form frame from raw data buffer and color space xform from yuv to rgba */
+                    Mat frame(camera_frame->height, camera_frame->width, CV_8UC2, camera_frame->data);
+                    cvtColor(frame, frame_out, COLOR_YUV2RGBA_YUY2);
 
-                // spatial filter
-                GaussianBlur(centroids, centroids, Size(11, 11), 0, 0);
+                    /* grayscale for processing */
+                    cv::Mat frame_gray;
+                    cvtColor(frame, frame_gray, COLOR_YUV2GRAY_YUY2);
 
-                // see pyimagesearch range-detector.py for tuning color range for object of interest
-                Scalar greenLower = Scalar(27, 40, 70);
-                Scalar greenUpper = Scalar(70, 245, 255);
-
-                // qualify ball object
-                Mat mask;
-                inRange(centroids, greenLower, greenUpper, mask);
-
-                // clean up the mask
-
-                int erosion_type = MORPH_RECT;
-                int erosion_size = 4;
-                Mat erosion_element = getStructuringElement(erosion_type,
-                                                            Size(2 * erosion_size + 1, 2 * erosion_size+1),
-                                                            Point(erosion_size, erosion_size) );
-                erode(mask, mask, erosion_element, Point(-1,-1), 2);
-
-                int dilation_type = MORPH_RECT;
-                int dilation_size = 4;
-                Mat dilation_element = getStructuringElement(dilation_type,
-                                                             Size(2 * dilation_size + 1, 2 * dilation_size+1),
-                                                             Point(dilation_size, dilation_size));
-                dilate(mask, mask, dilation_element, Point(-1,-1), 2);
-
-                // find largest contour the ball bask
-                vector<vector<Point>> contours;
-                vector<Vec4i> hierarchy;
-
-                findContours(mask.clone(), contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-
-                vector<Point> max_contour_ref;
-                int largest_area = 0;
-                int i = 0;
-                for (vector<vector<Point>>::iterator contour_iter = contours.begin() ; contour_iter != contours.end(); ++contour_iter, i++) {
-                    double area = contourArea(*contour_iter, false);
-                    if(area > largest_area) {
-                        largest_area = area;
-                        max_contour_ref = *contour_iter;
+                    /* resize for processing */
+                    double scale = 1.;
+                    int processing_width{300};
+                    if (camera_frame->width > processing_width) {
+                        scale = double(processing_width)/camera_frame->width;
+                        cv::Size2i size(processing_width, camera_frame->height * scale);
+                        cv::resize(frame_gray, frame_gray, size, 0, 0, cv::INTER_LINEAR);
                     }
-                }
 
-                // center of mass and radius for largest area contour
-                Point2f center;
-                float radius;
-                if (max_contour_ref.size()) {
-                    minEnclosingCircle(max_contour_ref, center, radius);
-                    Moments mu = moments(max_contour_ref, false);
-                    Point center = Point(int(mu.m10/mu.m00) , int(mu.m01/mu.m00));
-                    if (radius > 10) {
-                        // renderball outline
-                        circle(frame_out, center, radius, Scalar(255, 0, 0), 2);
+                    /* load cascade classifier file */
+                    cv::CascadeClassifier face_cascade;
+                    face_cascade.load(face_classifier_filename);
 
-                        // cm tracking tail
-                        fixed_size_deque_x[fixed_size_deque_index] = center.x;
-                        fixed_size_deque_y[fixed_size_deque_index++] = center.y;
+                    /* classified faces bounding boxes */
+                    vector<cv::Rect> bounding_rects;
+                    double scale_factor = 1.1;
+                    int min_neighbors = 5;
+                    cv::Size min_size(30, 30);
+                    int flags_ignore{0};
+                    face_cascade.detectMultiScale(frame_gray, bounding_rects, scale_factor, min_neighbors, flags_ignore, min_size);
+
+                    int thickness = 8;
+                    for (auto rect : bounding_rects) {
+                        cv::Scalar color(255, 0, 0);
+                        cv::rectangle(frame_out, rect.tl()/scale, rect.br()/scale, color, thickness);
+                    }
+
+                } else {
+
+                    /* form frame from raw data buffer and color space xform from yuv to rgba */
+                    Mat frame(camera_frame->height, camera_frame->width, CV_8UC2, camera_frame->data);
+                    cvtColor(frame, frame_out, COLOR_YUV2RGBA_YUY2);
+
+                    // perform video processing in huv color space
+                    Mat centroids;
+                    cvtColor(frame, centroids, COLOR_YUV2RGB_YUY2);
+                    cvtColor(centroids, centroids, COLOR_RGB2HSV);
+
+                    // spatial filter
+                    GaussianBlur(centroids, centroids, Size(11, 11), 0, 0);
+
+                    // see pyimagesearch range-detector.py for tuning color range for object of interest
+                    Scalar greenLower = Scalar(27, 40, 70);
+                    Scalar greenUpper = Scalar(70, 245, 255);
+
+                    // qualify ball object
+                    Mat mask;
+                    inRange(centroids, greenLower, greenUpper, mask);
+
+                    // clean up the mask
+
+                    int erosion_type = MORPH_RECT;
+                    int erosion_size = 4;
+                    Mat erosion_element = getStructuringElement(erosion_type,
+                                                                Size(2 * erosion_size + 1,
+                                                                     2 * erosion_size + 1),
+                                                                Point(erosion_size, erosion_size));
+                    erode(mask, mask, erosion_element, Point(-1, -1), 2);
+
+                    int dilation_type = MORPH_RECT;
+                    int dilation_size = 4;
+                    Mat dilation_element = getStructuringElement(dilation_type,
+                                                                 Size(2 * dilation_size + 1,
+                                                                      2 * dilation_size + 1),
+                                                                 Point(dilation_size,
+                                                                       dilation_size));
+                    dilate(mask, mask, dilation_element, Point(-1, -1), 2);
+
+                    // find largest contour the ball bask
+                    vector<vector<Point>> contours;
+                    vector<Vec4i> hierarchy;
+
+                    findContours(mask.clone(), contours, hierarchy, RETR_EXTERNAL,
+                                 CHAIN_APPROX_SIMPLE);
+
+                    vector<Point> max_contour_ref;
+                    int largest_area = 0;
+                    int i = 0;
+                    for (vector<vector<Point>>::iterator contour_iter = contours.begin();
+                         contour_iter != contours.end(); ++contour_iter, i++) {
+                        double area = contourArea(*contour_iter, false);
+                        if (area > largest_area) {
+                            largest_area = area;
+                            max_contour_ref = *contour_iter;
+                        }
+                    }
+
+                    // center of mass and radius for largest area contour
+                    Point2f center;
+                    float radius;
+                    if (max_contour_ref.size()) {
+                        minEnclosingCircle(max_contour_ref, center, radius);
+                        Moments mu = moments(max_contour_ref, false);
+                        Point center = Point(int(mu.m10 / mu.m00), int(mu.m01 / mu.m00));
+                        if (radius > 10) {
+                            // renderball outline
+                            circle(frame_out, center, radius, Scalar(255, 0, 0), 2);
+
+                            // cm tracking tail
+                            fixed_size_deque_x[fixed_size_deque_index] = center.x;
+                            fixed_size_deque_y[fixed_size_deque_index++] = center.y;
+                            if (fixed_size_deque_index == DEQUE_SIZE) fixed_size_deque_index = 0;
+                        }
+
+                        // render tracking tail
+                        for (int i = 1; i < DEQUE_SIZE; i++) {
+                            line(frame_out,
+                                 Point(fixed_size_deque_x[i - 1], fixed_size_deque_y[i - 1]),
+                                 Point(fixed_size_deque_x[i], fixed_size_deque_y[i]),
+                                 Scalar(0, 0, 255),
+                                 4);
+                        }
+
                         if (fixed_size_deque_index == DEQUE_SIZE) fixed_size_deque_index = 0;
                     }
-
-                    // render tracking tail
-                    for (int i = 1; i < DEQUE_SIZE; i++) {
-                        line(frame_out,
-                             Point(fixed_size_deque_x[i-1], fixed_size_deque_y[i-1]),
-                             Point(fixed_size_deque_x[i], fixed_size_deque_y[i]),
-                             Scalar(0, 0, 255),
-                             4);
-                    }
-
-                    if (fixed_size_deque_index == DEQUE_SIZE) fixed_size_deque_index = 0;
                 }
-
             }
 
             // return frame
@@ -316,6 +371,9 @@ int OpenCV::CycleProcessingMode() {
 
         case ProcessingMode::PROCESSING_MODE_BALL_TRACKER:
             processing_mode_ = ProcessingMode::PROCESSING_MODE_NONE;
+            break;
+
+        case ProcessingMode::PROCESSING_MODE_FACE_DETECT:
             break;
 
         default:

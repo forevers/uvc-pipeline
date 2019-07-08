@@ -212,9 +212,6 @@ static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
 
     IFrameAccessRegistration* frame_access_registration = reinterpret_cast<IFrameAccessRegistration *>(id_frame_access_handle);
 
-    OpenCV* opencv = nullptr;
-    opencv = new OpenCV(frame_access_registration, width, height);
-
     // https://stackoverflow.com/questions/13317387/how-to-get-file-in-assets-from-android-ndk
     // https://stackoverflow.com/questions/7595324/creating-temporary-files-in-android-with-ndk/10334111
 
@@ -225,12 +222,17 @@ static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
     AAssetManager* aasset_manager = AAssetManager_fromJava(env, AssetManager);
     AAssetDir* asset_dir = AAssetManager_openDir(aasset_manager, "cascades");
 
+    std::string cpp_file_path;
+
     const char* filename = (const char*)NULL;
     while ((filename = AAssetDir_getNextFileName(asset_dir)) != NULL) {
 
         if (0 == strcmp(filename, "haarcascade_frontalface_default.xml")) {
 
-            AAsset* asset = AAssetManager_open(aasset_manager, filename, AASSET_MODE_STREAMING);
+            std::string asset_name("cascades/");
+            asset_name += filename;
+            AAsset* asset = AAssetManager_open(aasset_manager, asset_name.c_str(), AASSET_MODE_STREAMING);
+
             char buf[1024];
             int nb_read = 0;
 
@@ -243,7 +245,7 @@ static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
             jmethodID getAbsolutePath = env->GetMethodID(fileClass, "getAbsolutePath", "()Ljava/lang/String;");
             jstring java_file_path = (jstring)env->CallObjectMethod(file, getAbsolutePath);
             const char* c_file_path = env->GetStringUTFChars(java_file_path, NULL);
-            std::string cpp_file_path(c_file_path);
+            cpp_file_path += c_file_path;
             cpp_file_path += "/";
             cpp_file_path += filename;
 
@@ -265,6 +267,9 @@ static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
             break;
         }
     }
+
+    OpenCV* opencv = nullptr;
+    opencv = new OpenCV(frame_access_registration, width, height, cpp_file_path);
 
     RETURN_(MAIN_TAG, reinterpret_cast<jlong>(opencv), jlong);
 }
