@@ -6,14 +6,17 @@
 #include "util.h"
 #include "opencv.h"
 
-//#define MAIN_TAG "native_pipeline_lib"
-#define MAIN_TAG "test"
-
 #include <android/native_window.h>
 #include <opencv2/core.hpp>
 #include <opencv2/core/utility.hpp>
 
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+
 #include "renderer.h"
+
+#define MAIN_TAG "native_pipeline_lib"
+
 
 WebCam* camera_ = nullptr;
 
@@ -203,7 +206,7 @@ static jint nativeCameraStop(JNIEnv *env, jobject thiz,
 /** opencv interface **/
 
 static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
-                                long id_frame_access_handle, int height, int width) {
+                                long id_frame_access_handle, int height, int width, jobject context) {
 
     ENTER_(MAIN_TAG);
 
@@ -211,6 +214,57 @@ static jlong nativeOpencvCreate(JNIEnv *env, jobject thiz,
 
     OpenCV* opencv = nullptr;
     opencv = new OpenCV(frame_access_registration, width, height);
+
+    // https://stackoverflow.com/questions/13317387/how-to-get-file-in-assets-from-android-ndk
+    // https://stackoverflow.com/questions/7595324/creating-temporary-files-in-android-with-ndk/10334111
+
+    /* asset manager from activity context */
+    jclass context_class = env->GetObjectClass(context);
+    jmethodID getAssets = env->GetMethodID(context_class, "getAssets", "()Landroid/content/res/AssetManager;");
+    jobject AssetManager = env->CallObjectMethod(context, getAssets);
+    AAssetManager* aasset_manager = AAssetManager_fromJava(env, AssetManager);
+    AAssetDir* asset_dir = AAssetManager_openDir(aasset_manager, "cascades");
+
+    const char* filename = (const char*)NULL;
+    while ((filename = AAssetDir_getNextFileName(asset_dir)) != NULL) {
+
+        if (0 == strcmp(filename, "haarcascade_frontalface_default.xml")) {
+
+            AAsset* asset = AAssetManager_open(aasset_manager, filename, AASSET_MODE_STREAMING);
+            char buf[1024];
+            int nb_read = 0;
+
+            /* use cache directory for created files */
+            jmethodID getCacheDir = env->GetMethodID(context_class, "getCacheDir", "()Ljava/io/File;");
+
+            /* append filename to cache directory path */
+            jobject file = env->CallObjectMethod(context, getCacheDir);
+            jclass fileClass = env->FindClass("java/io/File");
+            jmethodID getAbsolutePath = env->GetMethodID(fileClass, "getAbsolutePath", "()Ljava/lang/String;");
+            jstring java_file_path = (jstring)env->CallObjectMethod(file, getAbsolutePath);
+            const char* c_file_path = env->GetStringUTFChars(java_file_path, NULL);
+            std::string cpp_file_path(c_file_path);
+            cpp_file_path += "/";
+            cpp_file_path += filename;
+
+            /* create file if it does not already exist in cache directory */
+            if (access(cpp_file_path.c_str(), F_OK ) != -1 ) {
+                /* file exists */
+            } else {
+                /* file doesn't exist */
+                FILE* out = fopen(cpp_file_path.c_str(), "w");
+                while ((nb_read = AAsset_read(asset, buf, 1024)) > 0)
+                    fwrite(buf, nb_read, 1, out);
+                fclose(out);
+            }
+
+            /* release resources */
+            AAsset_close(asset);
+            env->ReleaseStringUTFChars(java_file_path, c_file_path);
+
+            break;
+        }
+    }
 
     RETURN_(MAIN_TAG, reinterpret_cast<jlong>(opencv), jlong);
 }
@@ -413,7 +467,7 @@ int register_camera(JNIEnv *env) {
 
 // opencv stage
 static JNINativeMethod methods_opencv[] = {
-    { "nativeCreate", "(JII)J", (void *) nativeOpencvCreate },
+    { "nativeCreate", "(JIILandroid/content/Context;)J", (void *) nativeOpencvCreate },
     { "nativeGetFrameAccessIfc", "(JI)J", (void *) nativeOpencvGetFrameAccessIfc },
     { "nativeStart", "(J)I", (void *) nativeOpencvStart },
     { "nativeStop", "(J)I", (void *) nativeOpencvStop },

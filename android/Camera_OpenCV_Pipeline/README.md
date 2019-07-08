@@ -46,6 +46,7 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 ### Build Instructions
 - Obtain Android Studio project from this site. 
 - Download latest OpenCV SDK for Android from OpenCV.org and decompress the zip file.
+    - https://opencv.org/releases/
 - in libWebCam/src/main/cpp create symlink to OpenCV library
 	- ln -sfn <path to /OpenCV-android-sdk/sdk/native> opencv\_3\_4\_3\_native
 

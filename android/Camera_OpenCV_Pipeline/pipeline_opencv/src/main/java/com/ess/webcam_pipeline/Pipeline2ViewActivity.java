@@ -864,7 +864,7 @@ public class Pipeline2ViewActivity
             // TODO make this pid/vid driven
             int width_acquisition = negotiatedResolution.enumeratedResolution.width;
             int width_render = negotiatedResolution.enumeratedResolution.width;
-            opencv = new Opencv(camera.getFrameAccessIfc(0), negotiatedResolution.enumeratedResolution.height, width_acquisition);
+            opencv = new Opencv(camera.getFrameAccessIfc(0), negotiatedResolution.enumeratedResolution.height, width_acquisition, this);
 
             RenderSurface surface;
 
