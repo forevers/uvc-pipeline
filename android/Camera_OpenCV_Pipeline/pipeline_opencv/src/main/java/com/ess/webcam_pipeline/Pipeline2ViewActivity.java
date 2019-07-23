@@ -234,41 +234,56 @@ public class Pipeline2ViewActivity
 
         @Override
         public boolean onDown(MotionEvent event) {
+
             Log.d(TAG,"onDown: " + event.toString());
+
+            float width = renderSurface.cameraView.getWidth();
+            float height = renderSurface.cameraView.getHeight();
+
+            float percent_width = event.getX() / width;
+            float percent_height = event.getY() / height;
+
+            Log.d(TAG, "x: " + event.getX() + " y: " + event.getY());
+            Log.d(TAG, "%x: " + percent_width + " %y: " + percent_height);
+
+            if (opencv != null) {
+                opencv.touchView(percent_width, percent_height);
+            }
+
             return true;
         }
 
 
         @Override
         public boolean onSingleTapUp(MotionEvent event) {
+
             Log.d(DEBUG_TAG, "onSingleTapUp: " + event.toString());
 
             synchronized (pipelineSync) {
+if (false) {
+    if (isActive && isPreview && (camera != null) && (renderSurface != null)) {
 
-                if (isActive && isPreview && (camera != null) && (renderSurface != null)) {
-
-                    Log.e(TAG, "ACTION_DOWN");
-
-                    float yAxisVal = event.getY();
-                    int viewHeight = renderSurface.cameraView.getHeight();
-                    if (yAxisVal < viewHeight / 3) {
-                        if (usbDevice != null) {
-                            if (isActive == true && isPreview == true) {
-                                opencv.cycleProcessingMode();
-                            }
-                        }
-                    } else {
-                        if (renderSurface.cameraView.getVisibility() == View.VISIBLE) {
-                            renderSurface.cameraView.setVisibility(View.GONE);
-                            renderSurface.overlayTextView.setVisibility(View.GONE);
-                            renderSurface.renderer.setSurface(null);
-                        } else {
-                            renderSurface.cameraView.setVisibility(View.VISIBLE);
-                            renderSurface.overlayTextView.setVisibility(View.VISIBLE);
-                            renderSurface.renderer.setSurface(renderSurface.previewSurface);
-                        }
-                    }
+        float yAxisVal = event.getY();
+        int viewHeight = renderSurface.cameraView.getHeight();
+        if (yAxisVal < viewHeight / 3) {
+            if (usbDevice != null) {
+                if (isActive == true && isPreview == true) {
+                    opencv.cycleProcessingMode();
                 }
+            }
+        } else {
+            if (renderSurface.cameraView.getVisibility() == View.VISIBLE) {
+                renderSurface.cameraView.setVisibility(View.GONE);
+                renderSurface.overlayTextView.setVisibility(View.GONE);
+                renderSurface.renderer.setSurface(null);
+            } else {
+                renderSurface.cameraView.setVisibility(View.VISIBLE);
+                renderSurface.overlayTextView.setVisibility(View.VISIBLE);
+                renderSurface.renderer.setSurface(renderSurface.previewSurface);
+            }
+        }
+    }
+}
             }
 
             return true;

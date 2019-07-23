@@ -30,6 +30,8 @@ public:
 
     virtual int Stop() = 0;
 
+    virtual int TouchView(float percent_width, float percent_height) = 0;
+
     virtual int CycleProcessingMode() = 0;
 
 };

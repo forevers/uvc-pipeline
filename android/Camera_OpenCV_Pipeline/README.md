@@ -2,9 +2,11 @@
 
 This repository contains the **Camera_OpenCV_Pipeline** Android Studio project. It contains JNI and Java source to construct a multi-stage pipeline to acquire video frames delivered by a platform or external UVC compliant camera, perform processing on them and render the results to Android 2D and 3D Surface Views.
 
-Below are a few videos for ball tracking and face detection.
+Below are a few videos for object tracking and face detection features.
 
-Ball Tracking :
+Object Tracking (Hue Based):
+
+[![Watch the video](https://img.youtube.com/vi/ogLN6q8gaY4/2.jpg)](https://www.youtube.com/watch?v=ogLN6q8gaY4&feature=youtu.be "object tracking")
 
 [![Watch the video](https://img.youtube.com/vi/0gUOx5ktNkA/2.jpg)](https://www.youtube.com/watch?v=0gUOx5ktNkA&feature=youtu.be "ball tracking")
 
@@ -25,7 +27,7 @@ The **Camera** class provides a source pipeline stage for connecting to the came
 Camera frames are accumulated in a queue, available for pull requests from downstream pipeline clients.
 
 ### Opencv
-The **Opencv** class provides a stage to implement OpenCV processing on camera frames. It implements the **IOpenCv** control interface to provide pipeline construction and asynchronous control. The initial feature extraction perform is ball tracking.
+The **Opencv** class provides a stage to implement OpenCV processing on camera frames. It implements the **IOpenCv** control interface to provide pipeline construction and asynchronous control. Touch and Swipe on the view surface controls the processing state.
 
 ### Renderer
 The **Renderer** class provides a sink stage to render camera frames into Application provided SurfaceViews. It implements the **IRenderer** control interface to provide pipeline construction and asynchronous control.
@@ -44,18 +46,18 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 ## Build Environment
 
 - Ubuntu 16.04 64 bit.
-- Android Studio 3.2.1
+- Android Studio 3.4.1
 -    File -> Settings -> Build, Execution, Deployment -> Compiler set Command-line Options: to --debug --stacktrace
-- Gradle version 4.6
-- OpenCV 3.4.3 Android libraries
-	- opencv-3.4.3-android-sdk.zip or https://github.com/opencv/opencv/tree/3.4.3
+- Gradle version 5.1.1
+- OpenCV 4.1.0 Android libraries
+	- opencv-4.1.0-android-sdk.zip or https://github.com/opencv/opencv/tree/4.1.0
 
 ### Build Instructions
 - Obtain Android Studio project from this site. 
 - Download latest OpenCV SDK for Android from OpenCV.org and decompress the zip file.
     - https://opencv.org/releases/
 - in libWebCam/src/main/cpp create symlink to OpenCV library
-	- ln -sfn <path to /OpenCV-android-sdk/sdk/native> opencv\_3\_4\_3\_native
+	- ln -sfn <path to /OpenCV-android-sdk/sdk/native> opencv\_4\_1\_0\_native
 
 
 ## Supported Devices
@@ -64,7 +66,7 @@ The **Renderer** class provides a sink stage to render camera frames into Applic
 
 ## License
 
-Copyright (c) 2018 Embedifying Software Services  [embedifying@gmail.com ](mailto:embedifying@gmail.com )
+Copyright (c) 2018-19 Embedifying Software Services  [embedifying@gmail.com ](mailto:embedifying@gmail.com )
 
 Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements.  See the NOTICE file distributed with this work for additional information regarding copyright ownership.  The ASF licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.  You may obtain a copy of the License at
 
@@ -87,4 +89,4 @@ Modified 3rd party files are :
 /libWebCam/src/main/cpp/UVCCamera_477aee8/libuvc/src/stream.c
 /libWebCam/src/main/cpp/UVCCamera_477aee8/localdefines.h
 
-See // libWebCam modification comments for changes.
+See /libWebCam modification comments for changes.

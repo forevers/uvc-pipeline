@@ -27,6 +27,10 @@ public class Opencv implements IOpencv {
         nativeStop(opencvHandle);
     }
 
+    public synchronized void touchView(float percentWidth, float percentHeight) {
+        nativeTouchView(opencvHandle, percentWidth, percentHeight);
+    }
+
     public synchronized void cycleProcessingMode() {
         nativeCycleProcessingMode(opencvHandle);
     }
@@ -40,5 +44,6 @@ public class Opencv implements IOpencv {
     private static final native long nativeGetFrameAccessIfc(final long id_open_cv, int interface_index);
     private static final native int nativeStart(final long id_opencv);
     private static final native int nativeStop(final long id_opencv);
+    private static final native int nativeTouchView(final long id_opencv, float percent_width, float percent_height);
     private static final native int nativeCycleProcessingMode(final long id_opencv);
 }

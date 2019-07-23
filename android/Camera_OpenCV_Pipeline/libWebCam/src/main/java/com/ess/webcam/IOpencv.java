@@ -24,6 +24,13 @@ public interface IOpencv {
     public void stop();
 
     /**
+     * primary view touched
+     * @param percent_width touch y location %
+     * @param percent_height touch x location %
+     */
+    public void touchView(float percent_width, float percent_height);
+
+    /**
      * Cycles through opencv processes
      */
     public void cycleProcessingMode();

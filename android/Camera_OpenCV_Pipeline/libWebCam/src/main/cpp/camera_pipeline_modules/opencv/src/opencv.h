@@ -36,6 +36,7 @@ public:
     int Start() override;
     void ConfigProcessingMode(IOpenCVControl::ProcessingMode demo_mode) override;
     int Stop() override;
+    int TouchView(float percent_width, float percent_height) override;
     int CycleProcessingMode() override;
 
     // IFrameAccessRegistration methods
@@ -90,6 +91,10 @@ private:
 
     // opencv ball tracking demo
     BallTrackerState ball_tracker_state_;
+    float touch_x_percent_;
+    float touch_y_percent_;
+    cv::Scalar hsv_lower_;
+    cv::Scalar hsv_upper_;
 
     // opencv face detection demo
     std::string face_classifier_filename;

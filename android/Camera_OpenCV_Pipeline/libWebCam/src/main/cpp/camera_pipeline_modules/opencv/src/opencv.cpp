@@ -35,6 +35,8 @@ OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height, st
         client_owns_buffer_(false),
         processing_mode_(ProcessingMode::PROCESSING_MODE_NONE),
         ball_tracker_state_(BALL_TRACKER_INIT),
+        touch_x_percent_(-1.0),
+        touch_y_percent_(-1.0),
         face_classifier_filename(face_classifier_filename)
 {
     ENTER_(OPENCV_TAG);
@@ -84,6 +86,10 @@ OpenCV::OpenCV(IFrameAccessRegistration* frame_access, int width, int height, st
 
     pthread_cond_init(&release_sync_, nullptr);
     pthread_mutex_init(&release_mutex_, nullptr);
+
+    /* object tracker */
+    hsv_lower_ = Scalar(27, 40, 70);
+    hsv_upper_ = Scalar(70, 245, 255);
 
     EXIT_(OPENCV_TAG);
 }
@@ -187,7 +193,7 @@ cv::Mat OpenCV::ProcessDemo(CameraFrame* camera_frame) {
 
             if (camera_frame->frame_format == CAMERA_FRAME_FORMAT_YUYV) {
 
-                if (true) {
+                if (false) {
                     /*
                      * A supervised cascade classifier based algorithm first developed by Paul Viola and Michael Jones. Originally based on Haar Wavelets,
                      * this implementation now utilizes Diagonal Features and Local Binary Patterns. An opencv provided pre-trained face-recognition
@@ -237,21 +243,84 @@ cv::Mat OpenCV::ProcessDemo(CameraFrame* camera_frame) {
                     Mat frame(camera_frame->height, camera_frame->width, CV_8UC2, camera_frame->data);
                     cvtColor(frame, frame_out, COLOR_YUV2RGBA_YUY2);
 
-                    // perform video processing in huv color space
+                    // perform video processing in hsv color space
                     Mat centroids;
                     cvtColor(frame, centroids, COLOR_YUV2RGB_YUY2);
                     cvtColor(centroids, centroids, COLOR_RGB2HSV);
 
+                    static bool triggered{false};
+                    static uint8_t accum{0};
+                    double hue{0.};
+                    double saturation{0.};
+                    double value{0.};
+                    int pixel_x{0};
+                    int pixel_y{0};
+
+                    /* perform hsv range calculation */
+                    if (touch_x_percent_ != -1.0 && !triggered) {
+
+                        triggered = true;
+                        hue = saturation = value = 0.;
+                        pixel_x = camera_frame->width * touch_x_percent_;
+                        pixel_y = camera_frame->height * touch_y_percent_;
+                    }
+
+                    if (triggered) {
+
+                        for (int i = -4; i < 4; ++i) {
+                            for (int j = -4; j < 4; ++j) {
+
+                                LOGI_(OPENCV_TAG, "hsv = %d:%d:%d",
+                                        centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[0],
+                                        centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[1],
+                                        centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[2]);
+
+                                hue += centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[0];
+                                saturation += centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[1];
+                                value += centroids.at<cv::Vec3b>(pixel_y + j, pixel_x + i).val[2];
+                            }
+                        }
+
+                        hue /= 8*8;
+                        saturation /= 8*8;
+                        value /= 8*8;
+
+                        LOGI_(OPENCV_TAG, "HSV_AVG = %f:%f:%f", hue, saturation, value);
+
+                        double hue_plus = 8.f;
+                        double hue_minus = 8.f;
+                        double hue_max = hue + hue_plus;
+                        double hue_min = hue - hue_minus;
+                        if (hue_max > 255.) hue_max = 255.;
+                        if (hue_min < 0.) hue_min = 0.;
+                        double saturation_max = saturation * 1.2;
+                        if (saturation_max > 255.) saturation_max = 255.;
+                        double saturation_min = saturation * 0.5;
+
+                        hsv_lower_[0] = hue_min;
+                        hsv_lower_[1] = 40; // saturation_min;
+                        hsv_lower_[2] = 70;//value_min;
+                        hsv_upper_[0] = hue_max;
+                        hsv_upper_[1] = 255; //saturation_max;
+                        hsv_upper_[2] = 255;//value_max;
+
+                        triggered = false;
+                        touch_x_percent_ = touch_y_percent_ = -1.0;
+                        hue = 0.;
+                        saturation = 0.;
+                        value = 0.;
+
+                        LOGI_(TAG, "HSV lower %f:%f:%f, HSV upper %f:%f:%f",
+                                hsv_lower_[0],hsv_lower_[1], hsv_lower_[2],
+                                hsv_upper_[0], hsv_upper_[1], hsv_upper_[2]);
+                    }
+
                     // spatial filter
                     GaussianBlur(centroids, centroids, Size(11, 11), 0, 0);
 
-                    // see pyimagesearch range-detector.py for tuning color range for object of interest
-                    Scalar greenLower = Scalar(27, 40, 70);
-                    Scalar greenUpper = Scalar(70, 245, 255);
-
                     // qualify ball object
                     Mat mask;
-                    inRange(centroids, greenLower, greenUpper, mask);
+                    inRange(centroids, hsv_lower_, hsv_upper_, mask);
 
                     // clean up the mask
 
@@ -353,6 +422,19 @@ int OpenCV::Stop() {
     } else {
         LOGI_(OPENCV_TAG, "Stop() call when not running");
     }
+
+    RETURN_(OPENCV_TAG, CAMERA_SUCCESS, int);
+}
+
+
+int OpenCV::TouchView(float percent_width, float percent_height) {
+    ENTER_(OPENCV_TAG);
+
+    LOGI_(OPENCV_TAG, "native view touch x: %f, y: %f", percent_width, percent_height);
+
+    // if in tracking mode, queue hsv request at this location
+    touch_x_percent_ = percent_width;
+    touch_y_percent_ = percent_height;
 
     RETURN_(OPENCV_TAG, CAMERA_SUCCESS, int);
 }

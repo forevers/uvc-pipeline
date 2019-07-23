@@ -333,6 +333,23 @@ static jint nativeOpencvStop(JNIEnv *env, jobject thiz,
     RETURN_(MAIN_TAG, result, jint);
 }
 
+static jint nativeOpencvTouchView(JNIEnv *env, jobject thiz,
+                                  jlong id_opencv, jfloat percent_width, jfloat percent_height) {
+    ENTER_(MAIN_TAG);
+
+    jint result = JNI_OK;
+
+    IOpenCVControl* opencv_control_ifc = reinterpret_cast<OpenCV*>(id_opencv);
+
+    if (opencv_control_ifc) {
+        if (CAMERA_SUCCESS != opencv_control_ifc->TouchView(percent_width, percent_height)) {
+            result = JNI_ERR;
+        }
+    }
+
+    RETURN_(MAIN_TAG, result, jint);
+}
+
 static jint nativeOpencvCycleProcessingMode(JNIEnv *env, jobject thiz,
                                             jlong id_opencv) {
     ENTER_(MAIN_TAG);
@@ -476,8 +493,8 @@ static JNINativeMethod methods_opencv[] = {
     { "nativeGetFrameAccessIfc", "(JI)J", (void *) nativeOpencvGetFrameAccessIfc },
     { "nativeStart", "(J)I", (void *) nativeOpencvStart },
     { "nativeStop", "(J)I", (void *) nativeOpencvStop },
+    { "nativeTouchView", "(JFF)I", (void *) nativeOpencvTouchView },
     { "nativeCycleProcessingMode", "(J)I", (void *) nativeOpencvCycleProcessingMode }
-
 };
 
 int register_opencv(JNIEnv *env) {
