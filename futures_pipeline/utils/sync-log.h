@@ -14,6 +14,12 @@ public:
 
     void Log(std::string msg);
 
+    template<class... Args>
+    void LogV(Args... args)
+    {
+        (std::cout << ... << args) << "\n";
+    };
+
 private:
 
     std::mutex log_mtx_;

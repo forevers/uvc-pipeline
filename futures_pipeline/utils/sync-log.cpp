@@ -1,4 +1,4 @@
-#include "SyncLog.h"
+#include "sync-log.h"
 
 SyncLog *SyncLog::log_ = 0;
 
