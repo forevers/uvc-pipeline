@@ -4,6 +4,7 @@
 
 //#include "frame_access_registration_ifc.h"
 
+#include <string>
 
 class ICameraControl {
 
@@ -19,9 +20,10 @@ public:
     virtual int Stop() = 0;
 
     //virtual int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) = 0;
+    // virtual std::string GetSupportedVideoModes() = 0;
 
-    // virtual char* 
-    virtual void GetSupportedCameras() = 0;
+private:
+
     //virtual char* GetSupportedVideoModes() = 0;
 
     //virtual int SetPreviewSize(int width, int height, int min_fps, int max_fps, CameraFormat camera_frame_format) = 0;

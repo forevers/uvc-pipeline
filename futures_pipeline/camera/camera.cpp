@@ -7,9 +7,13 @@
 // #include "webcam_include."
 // #include "libuvc/libuvc_internal.h"
 #include "rapidjson/prettywriter.h"
+#include "rapidjson/schema.h"
 // #include "prettywriter.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
+#include "schema.h"
+#include "schema_invalid.h"
+
 
 // #include <ctype.h>
 #include <memory>
@@ -69,8 +73,9 @@ shared_ptr<Output> async_function(shared_ptr<Input> input)
 }
 
 
-Camera::Camera()
-    : synclog_(SyncLog::GetLog())
+Camera::Camera() :
+    synclog_(SyncLog::GetLog()),
+    detected_{false}
         // : uvc_fd_(0),
         //   usb_fs_(nullptr),
         //   camera_context_(nullptr),
@@ -82,6 +87,14 @@ Camera::Camera()
     synclog_->LogV(__FUNCTION__, " entry");
     // ENTER_(CAMERA_TAG);
 
+    camera_doc_.SetObject();
+
+    /* v4l2-ctl camera mode detection */
+    if (DetectCameras()) {
+        cout<<"cameras detected"<<endl;
+    } else {
+        cout<<"no cameras detected"<<endl;
+    }
     // EXIT_(CAMERA_TAG);
 }
 
@@ -188,24 +201,20 @@ void FindAllOccurances(std::vector<size_t>& vec, std::string search_this, std::s
 
 /* query for installed cameras
     v4l2-ctl --list-devices
-    v4l2-ctl --device=<device number> -D 
-    v4l2-ctl --device=<device number> -D --list-formats-ext
+    v4l2-ctl --device=/dev/video<device number> -D 
+    v4l2-ctl --device=/dev/video<device number> -D --list-formats-ext
 */
 
-//char*
-void Camera::GetSupportedCameras() {
 
-    /* rapidJSON - Default template parameter uses UTF8 and MemoryPoolAllocator. */
-    Document document;
-    document.SetObject();
-
+bool Camera::DetectCameras() 
+{
     size_t pos = 0;
     size_t pos_end = 0;
 
     string camera_card_type;
 
     Value camera_array(kArrayType);
-    Document::AllocatorType& allocator = document.GetAllocator();
+    Document::AllocatorType& allocator = camera_doc_.GetAllocator();
 
     /* active video device nodes */
     string device_list = exec("ls -1 /dev/video*");
@@ -223,9 +232,9 @@ void Camera::GetSupportedCameras() {
 
         /* /dev/video<x> */
         Value device_node_val;
-        device_node_val.SetString(device_node.c_str(), device_node.length(), document.GetAllocator());
-        camera_device_value.AddMember("device node", device_node_val, allocator);
+        device_node_val.SetString(device_node.c_str(), device_node.length(), allocator);
 
+        Value camera_card_type_val;
         pos = 0;
         string delimiter = "Card type     : ";
         if (string::npos != (pos = device_formats.find(delimiter, pos))) {
@@ -236,16 +245,12 @@ void Camera::GetSupportedCameras() {
 
                 size_t len = pos_end - pos;
                 camera_card_type = device_formats.substr(pos, len);
-                // cout<<delimiter<<camera_card_type<<endl;
                 pos = pos_end;
-                Value camera_card_type_val;
-                camera_card_type_val.SetString(camera_card_type.c_str(), camera_card_type.length(), document.GetAllocator());
-                camera_device_value.AddMember("card type", camera_card_type_val, allocator);
+                camera_card_type_val.SetString(camera_card_type.c_str(), camera_card_type.length(), allocator);
             }
         }
 
         Value capture_type_array(kArrayType);
-
         delimiter = "ioctl: VIDIOC_ENUM_FMT";
         if (string::npos != (pos = device_formats.find(delimiter, pos))) {
             
@@ -262,7 +267,6 @@ void Camera::GetSupportedCameras() {
                 if (string::npos != (pos_end = device_formats.find("\n", pos))) {
                     size_t len = pos_end - pos;
                     index = stoi(device_formats.substr(pos, len));
-                    // cout<<delimiter<<index<<endl;
                     pos = pos_end;
                 }
 
@@ -272,7 +276,6 @@ void Camera::GetSupportedCameras() {
                     if (string::npos != (pos_end = device_formats.find("\n", pos))) {
                         size_t len = pos_end - pos;
                         type = device_formats.substr(pos, len);
-                        // cout<<delimiter<<type<<endl;
                         pos = pos_end;
                     }
                 }
@@ -283,7 +286,6 @@ void Camera::GetSupportedCameras() {
                     if (string::npos != (pos_end = device_formats.find('\n', pos))) {
                         size_t len = pos_end - pos;
                         format = device_formats.substr(pos, len);
-                        // cout<<delimiter<<format<<endl;
                         pos = pos_end;
                     }
                 }
@@ -294,7 +296,6 @@ void Camera::GetSupportedCameras() {
                     if (string::npos != (pos_end = device_formats.find('\n', pos))) {
                         size_t len = pos_end - pos;
                         name = device_formats.substr(pos, len);
-                        // cout<<delimiter<<name<<endl;
                         pos = pos_end;
                     }
                 }
@@ -376,13 +377,17 @@ void Camera::GetSupportedCameras() {
                             getline(res_rate_ss, line);
                         }
 
-                        res_rate_val.AddMember("resolution", resolution_val, allocator);
-                        res_rate_val.AddMember("rates", rate_array, allocator);
-                        res_rate_array.PushBack(res_rate_val, allocator);
+                        if (rate_array.Size()) {
+                            res_rate_val.AddMember("resolution", resolution_val, allocator);
+                            res_rate_val.AddMember("rates", rate_array, allocator);
+                            res_rate_array.PushBack(res_rate_val, allocator);
+                        }
                     }
 
-                    capture_format_value.AddMember("res rates", res_rate_array, allocator);
-                    capture_type_array.PushBack(capture_format_value, allocator);
+                    if (res_rate_array.Size()) {
+                        capture_format_value.AddMember("res rates", res_rate_array, allocator);
+                        capture_type_array.PushBack(capture_format_value, allocator);
+                    }
                 }
 
                 /* next format */
@@ -390,21 +395,125 @@ void Camera::GetSupportedCameras() {
 
             } /* end while ioctl: VIDIOC_ENUM_FMT */
 
-            camera_device_value.AddMember("formats", capture_type_array, allocator);
+            if (capture_type_array.Size()) {
+                camera_device_value.AddMember("device node", device_node_val, allocator);
+                camera_device_value.AddMember("card type", camera_card_type_val, allocator);
+                camera_device_value.AddMember("formats", capture_type_array, allocator);
+            }
+
+            // if (camera_device_value.ObjectEmpty()) {
+            //     cout<<"empty"<<endl;
+            // }
 
         } // if more lines for this device node
 
-        camera_array.PushBack(camera_device_value, allocator);
+        // only add dev nodes with VIDIOC_ENUM_FMT
+        if (!camera_device_value.ObjectEmpty()) {
+            camera_array.PushBack(camera_device_value, allocator);
+        }
 
-    } // while (device_list_ss >> device_node) {
+    } // while (device_list_ss >> device_node)
 
-    document.AddMember("cameras", camera_array, allocator);
+    camera_doc_.AddMember("cameras", camera_array, allocator);
 
     cout<<"render json document"<<endl;
     StringBuffer sb;
     PrettyWriter<StringBuffer> writer(sb);
-    document.Accept(writer);
+    camera_doc_.Accept(writer);
+    //if (!camera_doc_.Null()) {
+    if (camera_doc_.MemberCount()) {
+        detected_ = true;
+    }
     puts(sb.GetString());
+
+    {
+        // online schema generator
+        // https://www.liquid-technologies.com/online-json-to-schema-converter
+
+        // schema online validator
+        // https://www.jsonschemavalidator.net/
+
+
+        /* test schema */
+
+        // /* Compile a Document to SchemaDocument */
+        // SchemaDocument schema(camera_doc_);
+
+        // Document d;
+
+        // /* construct a SchemaValidator */
+        // SchemaValidator validator(schema);
+        // // if (!d.Accept(validator)) {
+        // if (!camera_doc_.Accept(validator)) {
+        //     // Input JSON is invalid according to the schema
+        //     // Output diagnostic information
+        //     StringBuffer sb;
+        //     validator.GetInvalidSchemaPointer().StringifyUriFragment(sb);
+        //     printf("Invalid schema: %s\n", sb.GetString());
+        //     printf("Invalid keyword: %s\n", validator.GetInvalidSchemaKeyword());
+        //     sb.Clear();
+        //     validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
+        //     printf("Invalid document: %s\n", sb.GetString());
+        // } else {
+        //     cout<<"schema passes *************"<<endl;
+
+        //     StringBuffer sb;
+        //     // sb.Clear();
+        //     // PrettyWriter<StringBuffer> writer(sb);
+        //     Writer<StringBuffer> writer(sb);
+        //     camera_doc_.Accept(writer);
+        //     puts(sb.GetString());
+        // }
+    } 
+
+    // valid schema
+    {
+        rapidjson::Document document;
+        document.Parse(g_schema);
+
+        rapidjson::SchemaDocument schemaDocument(document);
+        rapidjson::SchemaValidator validator(schemaDocument);
+
+        /* parse JSON string */
+        rapidjson::Document modelDoc;
+        modelDoc.Parse(sb.GetString());
+
+        if (!modelDoc.Accept(validator)) {
+            cout<<"schema invalidated"<<endl;
+        } else {
+            cout<<"schema validated"<<endl;
+        }
+    }
+
+    // invalid schema
+    {
+        rapidjson::Document document;
+        document.Parse(g_schema_invalid);
+
+        rapidjson::SchemaDocument schemaDocument(document);
+        rapidjson::SchemaValidator validator(schemaDocument);
+
+        rapidjson::Document modelDoc;
+        modelDoc.Parse(sb.GetString());
+
+        if (!modelDoc.Accept(validator)) {
+            cout<<"schema invalidated"<<endl;
+        } else {
+            cout<<"schema validated"<<endl;
+        }
+    }
+
+    // {
+    //     /* Compile a Document to SchemaDocument */
+    //     SchemaDocument schema(document);
+
+    //     rapidjson::Document sd;
+        
+    //     schema.GetRoot
+    //     sd.Parse(schemaJson.c_str());
+    // }
+
+    return detected_;
 }
 
 // char* WebCam::GetSupportedVideoModes() {
@@ -533,12 +642,9 @@ void Camera::GetSupportedCameras() {
 //     return result;
 // }
 
-int Camera::Start() {
+int Camera::Start() 
+{
     synclog_->LogV(__FUNCTION__, " entry");
-
-    // char* json_cameras =
-    GetSupportedCameras();
-
 
     std::cout << "FUTURE - ASYNC EXAMPLE" << std::endl;
 

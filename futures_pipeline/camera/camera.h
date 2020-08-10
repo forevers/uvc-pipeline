@@ -7,12 +7,12 @@
 
 #include "camera-control-ifc.h"
 #include "output.h"
+#include "rapidjson/document.h"
+
 //#include "webcam_status_callback.h"
 //#include "webcam_fifo.h"
 //#include "frame_access_registration_ifc.h"
 #include "sync-log.h"
-
-
 
 
 
@@ -30,17 +30,25 @@ public:
     int Start() override;
     int Stop() override;
     //int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) override;
-    //char* 
-    void GetSupportedCameras() override;
+    // void RegisterSupportedCameras() override;
+
     //char* GetSupportedVideoModes() override;
     //int SetPreviewSize(int width, int height, int min_fps, int max_fps, CameraFormat camera_format) override;
 
 private:
 
+    /* return number of cameras detected */
+    bool DetectCameras();
+    bool detected_;
+
     SyncLog* synclog_;
 
     // create promise ... can be issued anywhere in a context ... not just return value
     std::vector<std::future<std::shared_ptr<Output>>> future_vec_;
+
+    // TODO udevadm monitor to see usb register and unregistered devices
+    /* rapidJSON DOM- Default template parameter uses UTF8 and MemoryPoolAllocator */
+    rapidjson::Document camera_doc_;
 
 
     //char* usb_fs_;
