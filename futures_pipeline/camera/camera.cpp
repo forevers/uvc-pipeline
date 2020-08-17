@@ -13,9 +13,11 @@
 #include "rapidjson/stringbuffer.h"
 #include "schema.h"
 #include "schema_invalid.h"
+#include "utils.h"
 
 
 // #include <ctype.h>
+#include <cstring>
 #include <memory>
 #include <stdio.h>
 #include <string>
@@ -28,6 +30,12 @@
 
 using namespace rapidjson;
 using namespace std;
+
+#include <sys/ioctl.h>
+#include <fcntl.h> 
+#include <sys/types.h>
+// #include <sys/stat.h>
+#include <sys/mman.h>
 
 
 shared_ptr<Output> async_function(shared_ptr<Input> input)
@@ -72,6 +80,69 @@ shared_ptr<Output> async_function(shared_ptr<Input> input)
     return output;
 }
 
+const V4l2FormatInfo Camera::pixel_formats_[] = {
+    { "RGB332", V4L2_PIX_FMT_RGB332, 1 },
+    { "RGB555", V4L2_PIX_FMT_RGB555, 1 },
+    { "RGB565", V4L2_PIX_FMT_RGB565, 1 },
+    { "RGB555X", V4L2_PIX_FMT_RGB555X, 1 },
+    { "RGB565X", V4L2_PIX_FMT_RGB565X, 1 },
+    { "BGR24", V4L2_PIX_FMT_BGR24, 1 },
+    { "RGB24", V4L2_PIX_FMT_RGB24, 1 },
+    { "BGR32", V4L2_PIX_FMT_BGR32, 1 },
+    { "RGB32", V4L2_PIX_FMT_RGB32, 1 },
+    { "Y8", V4L2_PIX_FMT_GREY, 1 },
+    { "Y10", V4L2_PIX_FMT_Y10, 1 },
+    { "Y12", V4L2_PIX_FMT_Y12, 1 },
+    { "Y16", V4L2_PIX_FMT_Y16, 1 },
+    { "UYVY", V4L2_PIX_FMT_UYVY, 1 },
+    { "VYUY", V4L2_PIX_FMT_VYUY, 1 },
+    { "YUYV", V4L2_PIX_FMT_YUYV, 1 },
+    { "YVYU", V4L2_PIX_FMT_YVYU, 1 },
+    { "NV12", V4L2_PIX_FMT_NV12, 1 },
+    { "NV12M", V4L2_PIX_FMT_NV12M, 2 },
+    { "NV21", V4L2_PIX_FMT_NV21, 1 },
+    { "NV21M", V4L2_PIX_FMT_NV21M, 2 },
+    { "NV16", V4L2_PIX_FMT_NV16, 1 },
+    { "NV16M", V4L2_PIX_FMT_NV16M, 2 },
+    { "NV61", V4L2_PIX_FMT_NV61, 1 },
+    { "NV61M", V4L2_PIX_FMT_NV61M, 2 },
+    { "NV24", V4L2_PIX_FMT_NV24, 1 },
+    { "NV42", V4L2_PIX_FMT_NV42, 1 },
+    { "YUV420M", V4L2_PIX_FMT_YUV420M, 3 },
+    { "SBGGR8", V4L2_PIX_FMT_SBGGR8, 1 },
+    { "SGBRG8", V4L2_PIX_FMT_SGBRG8, 1 },
+    { "SGRBG8", V4L2_PIX_FMT_SGRBG8, 1 },
+    { "SRGGB8", V4L2_PIX_FMT_SRGGB8, 1 },
+    { "SBGGR10_DPCM8", V4L2_PIX_FMT_SBGGR10DPCM8, 1 },
+    { "SGBRG10_DPCM8", V4L2_PIX_FMT_SGBRG10DPCM8, 1 },
+    { "SGRBG10_DPCM8", V4L2_PIX_FMT_SGRBG10DPCM8, 1 },
+    { "SRGGB10_DPCM8", V4L2_PIX_FMT_SRGGB10DPCM8, 1 },
+    { "SBGGR10", V4L2_PIX_FMT_SBGGR10, 1 },
+    { "SGBRG10", V4L2_PIX_FMT_SGBRG10, 1 },
+    { "SGRBG10", V4L2_PIX_FMT_SGRBG10, 1 },
+    { "SRGGB10", V4L2_PIX_FMT_SRGGB10, 1 },
+    { "SBGGR12", V4L2_PIX_FMT_SBGGR12, 1 },
+    { "SGBRG12", V4L2_PIX_FMT_SGBRG12, 1 },
+    { "SGRBG12", V4L2_PIX_FMT_SGRBG12, 1 },
+    { "SRGGB12", V4L2_PIX_FMT_SRGGB12, 1 },
+    { "DV", V4L2_PIX_FMT_DV, 1 },
+    { "MJPEG", V4L2_PIX_FMT_MJPEG, 1 },
+    { "MPEG", V4L2_PIX_FMT_MPEG, 1 },
+};
+
+ const Field Camera::fields_[] = {
+    { "any", V4L2_FIELD_ANY },
+    { "none", V4L2_FIELD_NONE },
+    { "top", V4L2_FIELD_TOP },
+    { "bottom", V4L2_FIELD_BOTTOM },
+    { "interlaced", V4L2_FIELD_INTERLACED },
+    { "seq-tb", V4L2_FIELD_SEQ_TB },
+    { "seq-bt", V4L2_FIELD_SEQ_BT },
+    { "alternate", V4L2_FIELD_ALTERNATE },
+    { "interlaced-tb", V4L2_FIELD_INTERLACED_TB },
+    { "interlaced-bt", V4L2_FIELD_INTERLACED_BT },
+};
+
 
 Camera::Camera() :
     synclog_(SyncLog::GetLog()),
@@ -95,11 +166,16 @@ Camera::Camera() :
     } else {
         cout<<"no cameras detected"<<endl;
     }
+
+    sync_log_= SyncLog::GetLog();
+
+  
     // EXIT_(CAMERA_TAG);
 }
 
 
-Camera::~Camera() {
+Camera::~Camera()
+{
     synclog_->LogV(__FUNCTION__, " entry");
 
     // ENTER_(WEBCAM_TAG);
@@ -203,6 +279,7 @@ void FindAllOccurances(std::vector<size_t>& vec, std::string search_this, std::s
     v4l2-ctl --list-devices
     v4l2-ctl --device=/dev/video<device number> -D 
     v4l2-ctl --device=/dev/video<device number> -D --list-formats-ext
+    // if no modes that nodes is likely used for timestamp delivery
 */
 
 
@@ -416,17 +493,16 @@ bool Camera::DetectCameras()
 
     camera_doc_.AddMember("cameras", camera_array, allocator);
 
-    cout<<"render json document"<<endl;
-    StringBuffer sb;
-    PrettyWriter<StringBuffer> writer(sb);
-    camera_doc_.Accept(writer);
-    //if (!camera_doc_.Null()) {
+    // cout<<"render json document"<<endl;
+    // StringBuffer sb;
+    // PrettyWriter<StringBuffer> writer(sb);
+    // camera_doc_.Accept(writer);
     if (camera_doc_.MemberCount()) {
         detected_ = true;
     }
-    puts(sb.GetString());
+    // puts(sb.GetString());
 
-    {
+    // {
         // online schema generator
         // https://www.liquid-technologies.com/online-json-to-schema-converter
 
@@ -464,44 +540,44 @@ bool Camera::DetectCameras()
         //     camera_doc_.Accept(writer);
         //     puts(sb.GetString());
         // }
-    } 
+    // } 
 
-    // valid schema
-    {
-        rapidjson::Document document;
-        document.Parse(g_schema);
+    // // valid schema
+    // {
+    //     rapidjson::Document document;
+    //     document.Parse(g_schema);
 
-        rapidjson::SchemaDocument schemaDocument(document);
-        rapidjson::SchemaValidator validator(schemaDocument);
+    //     rapidjson::SchemaDocument schemaDocument(document);
+    //     rapidjson::SchemaValidator validator(schemaDocument);
 
-        /* parse JSON string */
-        rapidjson::Document modelDoc;
-        modelDoc.Parse(sb.GetString());
+    //     /* parse JSON string */
+    //     rapidjson::Document modelDoc;
+    //     modelDoc.Parse(sb.GetString());
 
-        if (!modelDoc.Accept(validator)) {
-            cout<<"schema invalidated"<<endl;
-        } else {
-            cout<<"schema validated"<<endl;
-        }
-    }
+    //     if (!modelDoc.Accept(validator)) {
+    //         cout<<"schema invalidated"<<endl;
+    //     } else {
+    //         cout<<"schema validated"<<endl;
+    //     }
+    // }
 
-    // invalid schema
-    {
-        rapidjson::Document document;
-        document.Parse(g_schema_invalid);
+    // // invalid schema
+    // {
+    //     rapidjson::Document document;
+    //     document.Parse(g_schema_invalid);
 
-        rapidjson::SchemaDocument schemaDocument(document);
-        rapidjson::SchemaValidator validator(schemaDocument);
+    //     rapidjson::SchemaDocument schemaDocument(document);
+    //     rapidjson::SchemaValidator validator(schemaDocument);
 
-        rapidjson::Document modelDoc;
-        modelDoc.Parse(sb.GetString());
+    //     rapidjson::Document modelDoc;
+    //     modelDoc.Parse(sb.GetString());
 
-        if (!modelDoc.Accept(validator)) {
-            cout<<"schema invalidated"<<endl;
-        } else {
-            cout<<"schema validated"<<endl;
-        }
-    }
+    //     if (!modelDoc.Accept(validator)) {
+    //         cout<<"schema invalidated"<<endl;
+    //     } else {
+    //         cout<<"schema validated"<<endl;
+    //     }
+    // }
 
     // {
     //     /* Compile a Document to SchemaDocument */
@@ -516,8 +592,17 @@ bool Camera::DetectCameras()
     return detected_;
 }
 
-// char* WebCam::GetSupportedVideoModes() {
-//     ENTER_(WEBCAM_TAG);
+string Camera::GetSupportedVideoModes() 
+{
+    synclog_->LogV(__FUNCTION__, " entry");
+
+    StringBuffer sb;
+    PrettyWriter<StringBuffer> writer(sb);
+    camera_doc_.Accept(writer);
+
+    return string(sb.GetString(), sb.GetSize());
+
+    // ENTER_(WEBCAM_TAG);
 
 //     char buf[1024];
 
@@ -605,9 +690,1062 @@ bool Camera::DetectCameras()
 //     } else {
 //         return nullptr;
 //     }
+}
 
+
+
+
+
+#define V4L_BUFFERS_DEFAULT 8
+#define V4L_BUFFERS_MAX     32
+int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_node, int enumerated_width, int enumerated_height/*, int actual_width, int actual_height*/)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    // struct device dev;
+    int ret;
+
+    /* Options parsings */
+    unsigned int capabilities = V4L2_CAP_VIDEO_CAPTURE;
+    //unused int do_set_time_per_frame = 1;
+    //unused int do_capture = 0;
+    const struct V4l2FormatInfo *info;
+    //unused int do_set_format = 0;
+    //unused int no_query = 0; 
+
+    /* Video buffers */
+    enum v4l2_memory memtype = V4L2_MEMORY_MMAP;
+    unsigned int pixelformat = V4L2_PIX_FMT_YUYV;
+    unsigned int stride = 0;
+    unsigned int quality = (unsigned int)-1;
+    unsigned int userptr_offset = 0;
+    unsigned int nbufs = V4L_BUFFERS_DEFAULT;
+    //unsigned int buffer_size = 0;
+    enum v4l2_field field = V4L2_FIELD_ANY;
+    struct v4l2_fract time_per_frame = {1, 30};
+    // struct v4l2_fract time_per_frame = {1, 5};
+
+    /* Capture loop */
+    BufferFillMode fill_mode = BUFFER_FILL_NONE;
+    const char *filename = "frame-#.bin";
+
+    VideoInit(&device_);
+
+    string f_optarg;
+    /* fourcc */
+    // TODO HC for now, enventually MPEG and others will be supported as enumerated in JSON
+    f_optarg = "YUYV";
+
+    info = V4l2FormatByName(f_optarg.c_str());
+    if (info == NULL) {
+        sync_log->Log("Unsupported video format "+f_optarg);
+        return 1;
+    }
+    pixelformat = info->fourcc;
+    sync_log->Log(to_string(__LINE__)+"> fourcc : "+f_optarg);
+
+    pixelformat = info->fourcc;
+    sync_log->Log(to_string(__LINE__)+"> enumerated_height : "+to_string(enumerated_height)
+        +", enumerated_width : "+to_string(enumerated_width));
+    
+    /* number of v4l2 buffers in kernel queue */
+    nbufs = 4;
+    if (nbufs > V4L_BUFFERS_MAX) nbufs = V4L_BUFFERS_MAX;
+
+    /* video device node */
+    if (!VideoHasFd(&device_)) {
+        ret = VideoOpen(&device_, device_node.c_str());
+            /* uvc camera device node at /dev/video<x> */
+        if (ret < 0) {
+            return 1;
+        } else {
+            sync_log->Log("video_has_fd() success");
+        }
+    }
+
+    /* query capabilities */
+    ret = VideoQueryCap(&device_, &capabilities);
+    if (ret < 0)
+        return 1;
+
+    /* capture, output, ... */
+    ret = CapGetBufType(capabilities);
+    if (ret < 0) return 1;
+
+    if (!VideoHasValidBufType(&device_))
+        VideoSetBufType(&device_, (v4l2_buf_type)ret);
+
+    device_.memtype = memtype;
+
+    /* Set the video format. */
+    if (VideoSetFormat(&device_, enumerated_width, enumerated_height, pixelformat, stride, field) < 0) {
+        VideoClose(&device_);
+        return 1;
+    }
+
+    VideoGetFormat(&device_);
+
+    /* Set the frame rate. */
+    if (VideoSetFramerate(&device_, &time_per_frame) < 0) {
+        VideoClose(&device_);
+    }
+
+    /* Set the compression quality. */
+    if (VideoSetQuality(&device_, quality) < 0) {
+        VideoClose(&device_);
+        return 1;
+    }
+
+    if (VideoPrepareCapture(&device_, nbufs, userptr_offset, filename, fill_mode)) {
+        VideoClose(&device_);
+        return 1;
+    }
+
+    /* Start streaming. */
+    ret = VideoEnable(&device_, 1);
+    if (ret < 0) {
+        sync_log->Log("video_enable() failure");
+        sync_log->Log("exit");
+        VideoFreeBuffers(&device_);
+        return 1;
+    }
+    return 0;
+
+}
+
+
+int Camera::UvcV4l2Exit(void) {
+
+    sync_log_->Log("uvc_v4l2_exit() entry");
+
+    // signal stop streaming
+
+    // joing
+
+    /* Stop streaming. */
+    VideoEnable(&device_, 0);
+
+    VideoFreeBuffers(&device_);
+
+    VideoClose(&device_);
+
+    sync_log_->Log("uvc_v4l2_exit() exit");
+
+    return 0;
+}
+
+
+void Camera::VideoInit(Device *device)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    sync_log->Log("entry "+string(__func__));
+
+    memset(device, 0, sizeof(Device));
+    device->fd = -1;
+
+    device->memtype = V4L2_MEMORY_MMAP;
+    device->buffers = NULL;
+    device->type = (enum v4l2_buf_type)-1;
+    sync_log->Log(to_string(__LINE__)+"> dev->type = "+to_string(device->type));
+
+    sync_log->Log("exit "+string(__func__));
+}
+
+
+bool Camera::VideoIsCapture(Device *dev)
+{
+    return dev->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+           dev->type == V4L2_BUF_TYPE_VIDEO_CAPTURE;
+}
+
+
+bool Camera::VideoIsOutput(Device* device)
+{
+    return device->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ||
+           device->type == V4L2_BUF_TYPE_VIDEO_OUTPUT;
+}
+
+
+bool Camera::VideoIsMplane(Device *dev)
+{
+    return dev->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+           dev->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+}
+
+
+bool Camera::VideoHasFd(Device* device)
+{
+    return device->fd != -1;
+}
+
+
+int Camera::VideoOpen(Device* device, const char *devname)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    sync_log->Log("entry "+string(__func__));
+
+    if (VideoHasFd(device)) {
+        sync_log->Log("Can't open device (already open)");
+        return -1;
+    }
+
+    // obtain camera device node file descriptor
+    device->fd = open(devname, O_RDWR);
+    if (device->fd < 0) {
+        sync_log->Log("Error opening device "+string(devname)+": "+strerror(errno)+" ("+to_string(errno)+")");
+        return device->fd;
+    }
+
+    sync_log->Log("Device "+string(devname)+" opened");
+
+    device->opened = 1;
+
+    sync_log->Log("exit "+string(__func__));
+
+    return 0;
+}
+
+
+bool Camera::VideoHasValidBufType(Device *device)
+{
+    return (int)device->type != -1;
+}
+
+
+void Camera::VideoSetBufType(Device *device, enum v4l2_buf_type type)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    sync_log->Log("enter "+string(__func__));
+
+    sync_log->Log(to_string(__LINE__)+" > dev->type = "+to_string(type));
+    
+    // type is V4LS_BUF_TYPE_VIDEO_CAPTURE_PLANE for mvis camera
+    device->type = type;
+
+    sync_log->Log("exit "+string(__func__));
+}
+
+
+int Camera::VideoSetFormat(Device* device, unsigned int w, unsigned int h,
+    unsigned int format, unsigned int stride,
+    enum v4l2_field field)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    struct v4l2_format fmt;
+    unsigned int i;
+    int ret;
+
+    sync_log->Log("enter "+string(__func__));
+
+    memset(&fmt, 0, sizeof fmt);
+    fmt.type = device->type;
+
+    if (VideoIsMplane(device)) {
+
+        const V4l2FormatInfo *info = V4l2FormatByFourCC(format);
+
+        fmt.fmt.pix_mp.width = w;
+        fmt.fmt.pix_mp.height = h;
+        fmt.fmt.pix_mp.pixelformat = format;
+        fmt.fmt.pix_mp.field = field;
+        // even though we are mplane format we will use just 1 plane
+        fmt.fmt.pix_mp.num_planes = info->n_planes;
+
+        for (i = 0; i < fmt.fmt.pix_mp.num_planes; i++)
+            fmt.fmt.pix_mp.plane_fmt[i].bytesperline = stride;
+    } else {
+        fmt.fmt.pix.width = w;
+        fmt.fmt.pix.height = h;
+        fmt.fmt.pix.pixelformat = format;
+        fmt.fmt.pix.field = field;
+        fmt.fmt.pix.bytesperline = stride;
+    }
+
+    sync_log->Log("***** VIDIOC_S_FMT *****");
+    
+    ret = ioctl(device->fd, VIDIOC_S_FMT, &fmt);
+    if (ret < 0) {
+        sync_log->Log("Unable to set format: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log->Log("exit");
+        return ret;
+    }
+
+    if (VideoIsMplane(device)) {
+        stringstream ss;
+        ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
+        ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
+        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        ss<<", colorspace : "<<hex<<"0x"<<fmt.fmt.pix_mp.colorspace;
+        ss<<", planes : "<<fmt.fmt.pix_mp.num_planes;
+        sync_log->Log(ss.str());
+
+        for (i = 0; i < fmt.fmt.pix_mp.num_planes; i++) {
+            sync_log->Log(" * Stride "+to_string(fmt.fmt.pix_mp.plane_fmt[i].bytesperline)+", buffer size "+to_string(fmt.fmt.pix_mp.plane_fmt[i].sizeimage));
+        }
+
+    } else {
+        stringstream ss;
+        ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
+        ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
+        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<", stride : "<<fmt.fmt.pix.bytesperline;
+        ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        sync_log->Log(ss.str());
+    }
+
+    sync_log->Log("exit");
+
+    return 0;
+}
+
+
+const V4l2FormatInfo* Camera::V4l2FormatByFourCC(unsigned int fourcc)
+{
+    unsigned int i;
+
+// int size = sizeof(pixel_formats_);
+// sizeof((a)[0]))
+
+    for (i = 0; i < ARRAY_SIZE(pixel_formats_); ++i) {
+        if (pixel_formats_[i].fourcc == fourcc)
+            return &pixel_formats_[i];
+    }
+
+    return NULL;
+}
+
+
+const V4l2FormatInfo* Camera::V4l2FormatByName(const char *name)
+{
+    unsigned int i;
+
+    for (i = 0; i < ARRAY_SIZE(pixel_formats_); ++i) {
+        if (strcasecmp(pixel_formats_[i].name, name) == 0)
+            return &pixel_formats_[i];
+    }
+
+    return NULL;
+}
+
+
+const char* Camera::V4l2FieldName(enum v4l2_field field)
+{
+    unsigned int i;
+
+    for (i = 0; i < ARRAY_SIZE(fields_); ++i) {
+        if (fields_[i].field == field)
+            return fields_[i].name;
+    }
+
+    return "unknown";
+}
+
+
+void Camera::VideoClose(Device* device)
+{
+    unsigned int i;
+
+    sync_log_->Log("enter");
+
+    for (i = 0; i < device->num_planes; i++)
+        free(device->pattern[i]);
+
+    free(device->buffers);
+    if (device->opened)
+        close(device->fd);
+
+    sync_log_->Log("exit");
+}
+
+
+int Camera::VideoGetFormat(Device* device)
+{
+    struct v4l2_format fmt;
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    memset(&fmt, 0, sizeof fmt);
+    fmt.type = device->type;
+
+    sync_log_->Log("***** VIDIOC_G_FMT *****");
+
+    ret = ioctl(device->fd, VIDIOC_G_FMT, &fmt);
+    if (ret < 0) {
+        sync_log_->Log("Unable to get format: "+string(strerror(errno))+ "("+to_string(errno)+").");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+    if (VideoIsMplane(device)) {
+        device->width = fmt.fmt.pix_mp.width;
+        device->height = fmt.fmt.pix_mp.height;
+        device->num_planes = fmt.fmt.pix_mp.num_planes;
+
+        stringstream ss;
+        ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
+        ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
+        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        ss<<", colorspace : "<<hex<<"0x"<<fmt.fmt.pix_mp.colorspace;
+        ss<<", planes : "<<fmt.fmt.pix_mp.num_planes;
+        sync_log_->Log(ss.str());
+
+
+        for (i = 0; i < fmt.fmt.pix_mp.num_planes; i++) {
+            device->plane_fmt[i].bytesperline =
+                    fmt.fmt.pix_mp.plane_fmt[i].bytesperline;
+            device->plane_fmt[i].sizeimage =
+                    fmt.fmt.pix_mp.plane_fmt[i].bytesperline ?
+                        fmt.fmt.pix_mp.plane_fmt[i].sizeimage : 0;
+
+            sync_log_->Log(" * Stride "+to_string(fmt.fmt.pix_mp.plane_fmt[i].bytesperline)+", buffer size "+to_string(fmt.fmt.pix_mp.plane_fmt[i].sizeimage));
+        }
+    } else {
+        device->width = fmt.fmt.pix.width;
+        device->height = fmt.fmt.pix.height;
+        device->num_planes = 1;
+
+        device->plane_fmt[0].bytesperline = fmt.fmt.pix.bytesperline;
+        device->plane_fmt[0].sizeimage = fmt.fmt.pix.bytesperline ? fmt.fmt.pix.sizeimage : 0;
+
+        stringstream ss;
+        ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
+        ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
+        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<", stride : "<<fmt.fmt.pix.bytesperline;
+        ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        sync_log_->Log(ss.str());
+    }
+
+    sync_log_->Log("exit");
+
+    return 0;
+}
+
+
+int Camera::VideoSetFramerate(Device* device, v4l2_fract* time_per_frame)
+{
+    struct v4l2_streamparm parm;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    memset(&parm, 0, sizeof parm);
+    parm.type = device->type;
+
+    ret = ioctl(device->fd, VIDIOC_G_PARM, &parm);
+    if (ret < 0) {
+        sync_log_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+    sync_log_->Log("Current frame rate: "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
+
+    parm.parm.capture.timeperframe.numerator = time_per_frame->numerator;
+    parm.parm.capture.timeperframe.denominator = time_per_frame->denominator;
+
+    ret = ioctl(device->fd, VIDIOC_S_PARM, &parm);
+    if (ret < 0) {
+        sync_log_->Log("Unable to set frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+    ret = ioctl(device->fd, VIDIOC_G_PARM, &parm);
+    if (ret < 0) {
+        sync_log_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log_->Log("exit\n");
+        return ret;
+    }
+
+    sync_log_->Log("Frame rate set : "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
+    sync_log_->Log("exit\n");
+    return 0;
+}
+
+
+int Camera::VideoSetQuality(Device* device, unsigned int quality)
+{
+    v4l2_jpegcompression jpeg;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    if (quality == (unsigned int)-1) {
+        sync_log_->Log(to_string(__LINE__)+" > invalid quality setting : "+to_string(quality));
+        sync_log_->Log("exit");
+        return 0;
+    }
+
+    memset(&jpeg, 0, sizeof jpeg);
+    jpeg.quality = quality;
+
+/*
+    https://linuxtv.org/downloads/v4l-dvb-apis/uapi/v4l/vidioc-g-jpegcomp.html?highlight=vidioc_s_jpegcomp
+
+        These ioctls are deprecated. New drivers and applications should use JPEG class controls for image quality and JPEG markers control.
+*/
+    sync_log_->Log("***** VIDIOC_S_JPEGCOMP *****");
+
+    ret = ioctl(device->fd, VIDIOC_S_JPEGCOMP, &jpeg);
+    if (ret < 0) {
+        sync_log_->Log("Unable to set quality to "+to_string(quality)+": "+strerror(errno)+" ("+to_string(errno)+")");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+    sync_log_->Log("***** VIDIOC_G_JPEGCOMP *****");
+
+    ret = ioctl(device->fd, VIDIOC_G_JPEGCOMP, &jpeg);
+    if (ret >= 0)
+        sync_log_->Log("Quality set to "+to_string(jpeg.quality));
+
+    sync_log_->Log("exit");
+    return 0;
+}
+
+
+int Camera::VideoPrepareCapture(Device*device, 
+    int nbufs, 
+    unsigned int offset,
+    const char *filename, 
+    enum BufferFillMode fill)
+{
+    unsigned int padding;
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    /* Allocate and map buffers. */
+    padding = (fill & BUFFER_FILL_PADDING) ? 4096 : 0;
+    if ((ret = VideoAllocBuffers(device, nbufs, offset, padding)) < 0) {
+        sync_log_->Log("video_alloc_buffers() failure");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+
+    if (VideoIsOutput(device)) {
+    //     ret = video_load_test_pattern(dev, filename);
+    //     if (ret < 0) {
+    //         LOG("video_load_test_pattern() failure\n");
+    //         LOG("exit\n");
+    //         return ret;
+    //     }
+    // TODO remove support for video output
+        sync_log_->Log("VIDEO OUTPUT NOT SUPPORTED");
+    }
+
+    /* Queue the buffers. */
+    for (i = 0; i < device->nbufs; ++i) {
+        ret = VideoQueueBuffer(device, i, fill);
+        if (ret < 0) {
+            sync_log_->Log("video_queue_buffer() failure");
+            sync_log_->Log("exit");
+            return ret;
+        }
+    }
+
+    sync_log_->Log("exit");
+    return 0;
+}
+
+
+int Camera::VideoAllocBuffers(Device* device, int nbufs, unsigned int offset, unsigned int padding)
+{
+    struct v4l2_plane planes[VIDEO_MAX_PLANES];
+    struct v4l2_requestbuffers rb;
+    struct v4l2_buffer buf;
+    struct buffer *buffers;
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    memset(&rb, 0, sizeof rb);
+    rb.count = nbufs;
+    rb.type = device->type;
+
+    rb.memory = device->memtype;
+
+    ret = ioctl(device->fd, VIDIOC_REQBUFS, &rb);
+    if (ret < 0) {
+        sync_log_->Log("Unable to request buffers: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log_->Log("exit");
+        return ret;
+    }
+
+    sync_log_->Log(to_string(rb.count)+" buffers requested.");
+
+    buffers = (buffer*)malloc(rb.count * sizeof buffers[0]);
+    if (buffers == NULL) {
+        sync_log_->Log("exit");
+        return -ENOMEM;
+    }
+
+    /* Map the buffers. */
+    for (i = 0; i < rb.count; ++i) {
+        const char *ts_type, *ts_source;
+
+        memset(&buf, 0, sizeof buf);
+        memset(planes, 0, sizeof planes);
+
+        buf.index = i;
+        buf.type = device->type;
+        buf.memory = device->memtype;
+        buf.length = VIDEO_MAX_PLANES;
+        buf.m.planes = planes;
+
+        sync_log_->Log(to_string(__LINE__)+" > ***** VIDIOC_QUERYBUF *****");
+
+        ret = ioctl(device->fd, VIDIOC_QUERYBUF, &buf);
+        if (ret < 0) {
+            sync_log_->Log("Unable to query buffer "+to_string(i)+": "+string(strerror(errno))+")"+to_string(errno)+")");
+            sync_log_->Log("exit");
+            return ret;
+        }
+        GetTsFlags(buf.flags, &ts_type, &ts_source);
+        sync_log_->Log("length: "+to_string(buf.length)+"offset: "+to_string(buf.m.offset)+
+            "timestamp type/source: "+string(ts_type)+"/"+ts_source);
+
+        buffers[i].idx = i;
+
+        switch (device->memtype) {
+        case V4L2_MEMORY_MMAP:
+            ret = VideoBufferMmap(device, &buffers[i], &buf);
+            break;
+
+        case V4L2_MEMORY_USERPTR:
+            ret = VideoBufferAllocUserptr(device, &buffers[i], &buf, offset, padding);
+            break;
+
+        default:
+            break;
+        }
+
+        if (ret < 0)
+            return ret;
+    }
+
+    device->timestamp_type = buf.flags & V4L2_BUF_FLAG_TIMESTAMP_MASK;
+    device->buffers = buffers;
+    device->nbufs = rb.count;
+
+    sync_log_->Log("exit");
+
+    return 0;
+}
+
+
+void Camera::GetTsFlags(uint32_t flags, const char **ts_type, const char **ts_source)
+{
+    switch (flags & V4L2_BUF_FLAG_TIMESTAMP_MASK) {
+    case V4L2_BUF_FLAG_TIMESTAMP_UNKNOWN:
+        *ts_type = "unk";
+        break;
+    case V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC:
+        *ts_type = "mono";
+        break;
+    case V4L2_BUF_FLAG_TIMESTAMP_COPY:
+        *ts_type = "copy";
+        break;
+    default:
+        *ts_type = "inv";
+    }
+    switch (flags & V4L2_BUF_FLAG_TSTAMP_SRC_MASK) {
+    case V4L2_BUF_FLAG_TSTAMP_SRC_EOF:
+        *ts_source = "EoF";
+        break;
+    case V4L2_BUF_FLAG_TSTAMP_SRC_SOE:
+        *ts_source = "SoE";
+        break;
+    default:
+        *ts_source = "inv";
+    }
+}
+
+
+int Camera::VideoBufferMmap(Device* dev, struct buffer* buffer, struct v4l2_buffer* v4l2buf)
+{
+    unsigned int length;
+    unsigned int offset;
+    unsigned int i;
+
+    sync_log_->Log("enter");
+
+    for (i = 0; i < dev->num_planes; i++) {
+        if (VideoIsMplane(dev)) {
+            length = v4l2buf->m.planes[i].length;
+            offset = v4l2buf->m.planes[i].m.mem_offset;
+        } else {
+            length = v4l2buf->length;
+            offset = v4l2buf->m.offset;
+        }
+
+        sync_log_->Log("***** mmap *****");
+
+        buffer->mem[i] = (uint8_t*)mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED,
+                      dev->fd, offset);
+        if (buffer->mem[i] == MAP_FAILED) {
+            sync_log_->Log("Unable to map buffer "+to_string(buffer->idx)+"/"+to_string(i)+": "+strerror(errno)+"("+to_string(errno)+")");
+            sync_log_->Log("exit");
+            return -1;
+        }
+
+        buffer->size[i] = length;
+        buffer->padding[i] = 0;
+
+        sync_log_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"mapped at address "+to_string(long(buffer->mem[i])));
+    }
+
+    sync_log_->Log("exit\n");
+
+    return 0;
+}
+
+
+int Camera::VideoBufferAllocUserptr(Device* device, struct buffer *buffer, struct v4l2_buffer *v4l2buf, unsigned int offset, unsigned int padding)
+{
+    int page_size = getpagesize();
+    unsigned int length;
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter\n");
+
+    for (i = 0; i < device->num_planes; i++) {
+        if (VideoIsMplane(device))
+            length = v4l2buf->m.planes[i].length;
+        else
+            length = v4l2buf->length;
+
+        ret = posix_memalign((void**)(&buffer->mem[i]), page_size,
+                     length + offset + padding);
+        if (ret < 0) {
+            sync_log_->Log("Unable to allocate buffer "+to_string(buffer->idx)+"/"+to_string(i)+" "+to_string(ret));
+            sync_log_->Log("exit");
+            return -ENOMEM;
+        }
+
+        buffer->mem[i] += offset;
+        buffer->size[i] = length;
+        buffer->padding[i] = padding;
+
+        sync_log_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"allocated at address "+to_string(long(buffer->mem[i])));
+    }
+
+    sync_log_->Log("exit");
+    return 0;
+}
+
+
+int Camera::VideoQueueBuffer(Device* device, int index, BufferFillMode fill)
+{
+    struct v4l2_buffer buf;
+    struct v4l2_plane planes[VIDEO_MAX_PLANES];
+    int ret;
+    unsigned int i;
+
+    memset(&buf, 0, sizeof buf);
+    buf.index = index;
+    buf.type = device->type;
+    buf.memory = device->memtype;
+
+    if (VideoIsOutput(device)) {
+        buf.flags = device->buffer_output_flags;
+        if (device->timestamp_type == V4L2_BUF_FLAG_TIMESTAMP_COPY) {
+            struct timespec ts;
+
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            buf.timestamp.tv_sec = ts.tv_sec;
+            buf.timestamp.tv_usec = ts.tv_nsec / 1000;
+        }
+    }
+
+    if (VideoIsMplane(device)) {
+        buf.m.planes = planes;
+        buf.length = device->num_planes;
+    } else {
+        buf.length = device->buffers[index].size[0];
+    }
+
+    if (device->memtype == V4L2_MEMORY_USERPTR) {
+        if (VideoIsMplane(device)) {
+            for (i = 0; i < device->num_planes; i++)
+                buf.m.planes[i].m.userptr = (unsigned long)device->buffers[index].mem[i];
+        } else {
+            buf.m.userptr = (unsigned long)device->buffers[index].mem[0];
+        }
+    }
+
+    for (i = 0; i < device->num_planes; i++) {
+        if (VideoIsOutput(device)) {
+            if (VideoIsMplane(device))
+                buf.m.planes[i].bytesused = device->patternsize[i];
+            else
+                buf.bytesused = device->patternsize[i];
+
+            memcpy(device->buffers[buf.index].mem[i], device->pattern[i],
+                   device->patternsize[i]);
+        } else {
+            if (fill & BUFFER_FILL_FRAME)
+                memset(device->buffers[buf.index].mem[i], 0x55,
+                       device->buffers[index].size[i]);
+            if (fill & BUFFER_FILL_PADDING)
+                memset(device->buffers[buf.index].mem[i] +
+                    device->buffers[index].size[i],
+                       0x55, device->buffers[index].padding[i]);
+        }
+    }
+
+    sync_log_->Log(to_string(__LINE__)+" > ***** VIDIOC_QBUF *****");
+
+    ret = ioctl(device->fd, VIDIOC_QBUF, &buf);
+    if (ret < 0)
+        sync_log_->Log("Unable to queue buffer: "+string(strerror(errno))+" ("+to_string(errno)+")");
+
+    return ret;
+}
+
+
+int Camera::VideoEnable(Device* device, int enable)
+{
+    int type = device->type;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    sync_log_->Log("***** "+string((enable ? "VIDIOC_STREAMON" : "VIDIOC_STREAMOFF"))+" *****");
+    
+    ret = ioctl(device->fd, enable ? VIDIOC_STREAMON : VIDIOC_STREAMOFF, &type);
+    if (ret < 0) {
+        sync_log_->Log("Unable to %s streaming: "+string(enable ? "start" : "stop")+" "+ strerror(errno)+" ("+to_string(errno)+")");
+        return ret;
+    }
+
+    sync_log_->Log("exit");
+
+    return 0;
+}
+
+
+int Camera::VideoFreeBuffers(Device* device)
+{
+    struct v4l2_requestbuffers rb;
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    if (device->nbufs == 0)
+        return 0;
+
+    for (i = 0; i < device->nbufs; ++i) {
+        switch (device->memtype) {
+        case V4L2_MEMORY_MMAP:
+            ret = VideoBufferMunmap(device, &device->buffers[i]);
+            if (ret < 0)
+                return ret;
+            break;
+        case V4L2_MEMORY_USERPTR:
+            VideoBufferFreeUserptr(device, &device->buffers[i]);
+            break;
+        default:
+            break;
+        }
+    }
+
+    memset(&rb, 0, sizeof rb);
+    rb.count = 0;
+    rb.type = device->type;
+    rb.memory = device->memtype;
+
+    ret = ioctl(device->fd, VIDIOC_REQBUFS, &rb);
+    if (ret < 0) {
+        sync_log_->Log("Unable to release buffers: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        sync_log_->Log("exit\n");
+        return ret;
+    }
+
+    sync_log_->Log(to_string(device->nbufs)+" buffers released");
+
+    free(device->buffers);
+    device->nbufs = 0;
+    device->buffers = NULL;
+
+    sync_log_->Log("exit\n");
+
+    return 0;
+}
+
+
+int Camera::VideoBufferMunmap(Device* device, buffer* buffer)
+{
+    unsigned int i;
+    int ret;
+
+    sync_log_->Log("enter");
+
+    for (i = 0; i < device->num_planes; i++) {
+        ret = munmap(buffer->mem[i], buffer->size[i]);
+        if (ret < 0) {
+            sync_log_->Log("Unable to unmap buffer "+to_string(buffer->idx)+"/"+to_string(i)+": "+strerror(errno)+" ("+to_string(errno)+")");
+        }
+
+        buffer->mem[i] = NULL;
+    }
+
+    sync_log_->Log("exit");
+
+    return 0;
+}
+
+
+void Camera::VideoBufferFreeUserptr(Device* device, buffer* buffer)
+{
+    unsigned int i;
+
+    for (i = 0; i < device->num_planes; i++) {
+        free(buffer->mem[i]);
+        buffer->mem[i] = NULL;
+    }
+}
+
+
+// int Camera::VideoQueryCap(Device* device, unsigned int* capabilities)
+// {
+//     SyncLog* sync_log = SyncLog::GetLog();
+
+//     struct v4l2_capability cap;
+//     int ret;
+
+//     sync_log->Log("enter "+string(__func__));
+//     sync_log->Log(__LINE__+" > ***** VIDIOC_QUERYCAP *****");
+
+//     memset(&cap, 0, sizeof cap);
+//     ret = ioctl(device->fd, VIDIOC_QUERYCAP, &cap);
+//     if (ret < 0) {
+//         sync_log->Log("exit "+string(__func__));
+//         return 0;
+//     }
+
+//     sync_log->Log(__LINE__+" > cap.capabilities : "+cap.capabilities);
+
+//     *capabilities = cap.capabilities & V4L2_CAP_DEVICE_CAPS ? cap.device_caps : cap.capabilities;
+
+//     sync_log->Log(__LINE__+" > *capabilities : "+*capabilities);
+
+//     LOG("Device `%s' on `%s' is a video %s (%s mplanes) device.\n",
+//         cap.card, cap.bus_info,
+//         video_is_capture(dev) ? "capture" : "output",
+//         video_is_mplane(dev) ? "with" : "without");
+
+//     LOG("exit\n");
+
+//     return 0;    
 // }
 
+
+// int Camera::QueryCapabilities(Device *dev, unsigned int *capabilities)
+int Camera::VideoQueryCap(Device* device, unsigned int *capabilities)
+{
+    stringstream ss;
+    struct v4l2_capability cap;
+    int ret;
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    sync_log->Log("entry");
+    sync_log->Log("ioctl VIDIOC_QUERYCAP");
+
+    memset(&cap, 0, sizeof cap);
+    ret = ioctl(device->fd, VIDIOC_QUERYCAP, &cap);
+    if (ret < 0) {
+        sync_log->Log("ioctl error "+to_string(ret)+": "+strerror(errno));
+        return 0;
+    }
+
+    ss<<"cap.capabilities : "<<hex<<"0x"<<cap.capabilities;
+    sync_log->Log(ss.str());
+    // sync_log->Log("cap.capabilities : "+to_string(cap.capabilities));
+    ss.str(string());
+    ss<<"cap.device_caps : "<<hex<<"0x"<<cap.device_caps;
+    sync_log->Log(ss.str());
+    // sync_log->Log("cap.device_caps : "+to_string(cap.device_caps));
+
+    *capabilities = cap.capabilities & V4L2_CAP_DEVICE_CAPS ? cap.device_caps : cap.capabilities;
+
+    ss.str(string());
+    ss<<"*capabilities : "<<hex<<"0x"<<*capabilities;
+    sync_log->Log(ss.str());
+
+    string cap_card_str((char*)(cap.card), sizeof(cap.card)/sizeof(uint8_t));
+    string cap_bus_info_str((char*)(cap.bus_info), sizeof(cap.bus_info)/sizeof(uint8_t));
+    sync_log->Log("Device "+cap_card_str+" on "+cap_bus_info_str+" is a video "+
+        (VideoIsCapture(device) ? "capture" : "output")+" ("+ (VideoIsMplane(device) ? "with" : "without")+
+        " mplanes device)");
+
+    sync_log->Log("exit");
+    return 0;
+}
+
+
+int Camera::CapGetBufType(unsigned int capabilities)
+{
+    SyncLog* sync_log = SyncLog::GetLog();
+
+    sync_log->Log("enter "+string(__func__));
+
+    // select the capability to use ... V4L2_CAP_VIDEO_CAPTURE_MPLANE for mvis camera
+    if (capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
+        sync_log->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE\nexit");
+        return V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    } else if (capabilities & V4L2_CAP_VIDEO_OUTPUT_MPLANE) {
+        sync_log->Log("V4L2_CAP_VIDEO_OUTPUT_MPLANE\exit");
+        return V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+    } else if (capabilities & V4L2_CAP_VIDEO_CAPTURE) {
+        sync_log->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE\nexit");
+        return  V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    } else if (capabilities & V4L2_CAP_VIDEO_OUTPUT) {
+        sync_log->Log("V4L2_CAP_VIDEO_OUTPUT\nexit");
+        return V4L2_BUF_TYPE_VIDEO_OUTPUT;
+    } else {
+        sync_log->Log("Device supports neither capture nor output.\nexit");
+        return -EINVAL;
+    }
+
+    sync_log->Log("exit");
+
+    return 0;
+}
+
+
+const char* Camera::V4l2FormatName(unsigned int fourcc)
+{
+    const V4l2FormatInfo *info;
+    static char name[5];
+    unsigned int i;
+
+    info = V4l2FormatByFourCC(fourcc);
+    if (info)
+        return info->name;
+
+    for (i = 0; i < 4; ++i) {
+        name[i] = fourcc & 0xff;
+        fourcc >>= 8;
+    }
+
+    name[4] = '\0';
+    return name;
+}
 
 // int WebCam::SetPreviewSize(int width, int height, int min_fps, int max_fps, CameraFormat camera_format) {
 //     ENTER_(WEBCAM_TAG);
