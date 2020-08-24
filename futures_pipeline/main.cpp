@@ -39,6 +39,7 @@ using namespace rapidjson;
 using namespace std;
 
 
+
 // class Input
 // {
 // public:
@@ -187,14 +188,59 @@ int main()
 
     camera->Start();
     {        
-        // string device_node_string{"/dev/video0"};
-        // int enumerated_width{640};
-        // int enumerated_height{480};
-        // if (0 != camera->UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
-        //     cout<<"UvcV4l2Init() success"<<endl;
-        // } else {
-        //     cout<<"UvcV4l2Init() failure"<<endl;
-        // }
+        // TODO scoped code to move toe Start()
+        string device_node_string{"/dev/video0"};
+        int enumerated_width{640};
+        int enumerated_height{480};
+        if (!camera->UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
+            cout<<"UvcV4l2Init() success"<<endl;
+
+            /* test v4l2 frame pull */
+            // temp test 5 seconds of 30 fps
+            long num_frames_to_capture = 5*30;
+            while (!camera->IsRunning() && num_frames_to_capture) {
+
+                // if (uvc_mode == UVC_MODE_LIBUSB) {
+
+                //     //std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                //     // 60fps simulation
+                //     std::this_thread::sleep_for(std::chrono::microseconds(16667));
+                //     {
+                //         std::lock_guard<std::mutex> lock(m_Mutex);
+
+                //         if (m_shall_stop)
+                //         {
+                //             m_message += "Stopped";
+                //             break;
+                //         }
+                //     }
+                // } else {
+                    // {
+                        //std::lock_guard<std::mutex> lock(m_Mutex);
+                        // 4l2 will block, issue signal to release mutex until frame arrives
+                camera->UvcV4l2GetFrame();
+                num_frames_to_capture--;
+            // }
+
+                // if (m_shall_stop)
+                // {
+                //     m_message += "Stopped";
+                //     break;
+                // }
+
+                // TODO signal the  pipeline flush ... blocking for return to indicate all pipe elements are flushed and in stop state
+                // frame_queue_ifc->Signal();
+                // }
+            }
+
+        } else {
+            cout<<"UvcV4l2Init() failure"<<endl;
+        }
+
+        camera->Stop();
+        {
+            camera->UvcV4l2Exit();
+        }
 
 #if 0 // this works
         // obtain camera device node file descriptor
@@ -259,9 +305,9 @@ int main()
     //     val = nullptr;
     // }
 
-    camera->Stop();
-    {
-        // camera->UvcV4l2Exit();
-    }
+    // camera->Stop();
+    // {
+    //     camera->UvcV4l2Exit();
+    // }
     return 0;
 }

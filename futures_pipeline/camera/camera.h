@@ -34,7 +34,6 @@ struct Field {
     enum v4l2_field field;
 };
 
-
 enum BufferFillMode
 {
     BUFFER_FILL_NONE = 0,
@@ -42,6 +41,14 @@ enum BufferFillMode
     BUFFER_FILL_PADDING = 1 << 1,
 };
 
+struct CameraConfig {
+    int bytes_per_pixel;
+    int width_enumerated;
+    int width_actual;
+    int height;
+    int bytes_per_row;
+    int fps;
+};
 
 class Camera : public ICameraControl {
 
@@ -55,6 +62,10 @@ public:
     //int Prepare(int vid, int pid, int fd, int busnum, int devaddr, const char *usbfs) override;
     int Start() override;
     int Stop() override;
+    bool IsRunning() override;
+    // +++++ TODO move to pipe interface
+    virtual int UvcV4l2GetFrame(void) override;
+    // ----- TODO move to pipe interface
     //int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) override;
     // void RegisterSupportedCameras() override;
     std::string GetSupportedVideoModes() override;
@@ -118,6 +129,8 @@ private:
     int VideoBufferMunmap(Device* device, buffer* buffer);
     void VideoBufferFreeUserptr(Device* device, buffer* buffer);
 
+    int VideoQueuebuffer(/*Device* device, */int index, BufferFillMode fill);
+
 
     //char* usb_fs_;
 
@@ -134,6 +147,8 @@ private:
     //WebcamFifo* webcam_fifo_;
 
     Device device_;
+    // TODO place under sync control
+    bool is_running_;
 
     SyncLog* sync_log_;
 

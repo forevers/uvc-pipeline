@@ -2,11 +2,13 @@
 
 SyncLog *SyncLog::log_ = 0;
 
+
 SyncLog* SyncLog::GetLog()
 {
     if (!log_) log_ = new SyncLog;
     return log_;
 }
+
 
 void SyncLog::Log(std::string msg)
 {

@@ -7,7 +7,6 @@
 
 class SyncLog
 {
-
 public:
 
     static SyncLog* GetLog();

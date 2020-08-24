@@ -44,6 +44,10 @@ public:
 
     virtual int Start() = 0;
     virtual int Stop() = 0;
+    virtual bool IsRunning() = 0;
+    // +++++ TODO move to pipe interface
+    virtual int UvcV4l2GetFrame(void) = 0;
+    // ----- TODO move to pipe interface
 
     //virtual int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) = 0;
     virtual std::string GetSupportedVideoModes() = 0;
