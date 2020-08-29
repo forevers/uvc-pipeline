@@ -188,7 +188,7 @@ int main()
 
     camera->Start();
     {        
-        // TODO scoped code to move toe Start()
+        // TODO scoped code to move to Start()
         string device_node_string{"/dev/video0"};
         int enumerated_width{640};
         int enumerated_height{480};

@@ -146,6 +146,26 @@ const V4l2FormatInfo Camera::pixel_formats_[] = {
     { "interlaced-bt", V4L2_FIELD_INTERLACED_BT },
 };
 
+// +++++ transform macros
+
+static inline unsigned char sat(int i) {
+  return (unsigned char)( i >= 255 ? 255 : (i < 0 ? 0 : i));
+}
+#define IYUYV2RGB_2(pyuv, prgb) { \
+    int r = (22987 * ((pyuv)[3] - 128)) >> 14; \
+    int g = (-5636 * ((pyuv)[1] - 128) - 11698 * ((pyuv)[3] - 128)) >> 14; \
+    int b = (29049 * ((pyuv)[1] - 128)) >> 14; \
+    (prgb)[0] = sat(*(pyuv) + r); \
+    (prgb)[1] = sat(*(pyuv) + g); \
+    (prgb)[2] = sat(*(pyuv) + b); \
+    (prgb)[3] = sat((pyuv)[2] + r); \
+    (prgb)[4] = sat((pyuv)[2] + g); \
+    (prgb)[5] = sat((pyuv)[2] + b); \
+    }
+#define IYUYV2RGB_4(pyuv, prgb) IYUYV2RGB_2(pyuv, prgb); IYUYV2RGB_2(pyuv + 4, prgb + 6);
+#define IYUYV2RGB_8(pyuv, prgb) IYUYV2RGB_4(pyuv, prgb); IYUYV2RGB_4(pyuv + 8, prgb + 12);
+
+// ----- transform macros
 
 Camera::Camera() :
     synclog_(SyncLog::GetLog()),
@@ -172,6 +192,32 @@ Camera::Camera() :
 
     sync_log_= SyncLog::GetLog();
 
+    // +++++ move to queue
+    // TODO keep camera source queing in native aquired format (probably yuyv)
+    //   construct the pipe of CameraFrames and let client perform any needed colorspace conversion
+    uvc_frame_.data = nullptr;
+    uvc_frame_.data_bytes = 0;
+    uvc_frame_.actual_bytes = 0;
+    uvc_frame_.width = 0;
+    uvc_frame_.height = 0;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
+
+    rgb_frame_.data = nullptr;
+    rgb_frame_.data_bytes = 0;
+    rgb_frame_.actual_bytes = 0;
+    rgb_frame_.width = 0;
+    rgb_frame_.height = 0;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
+    // ----- move to queue
+
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit()");
 }
 
@@ -194,6 +240,38 @@ Camera::~Camera()
     // if (status_callback_) {
     //     delete status_callback_;
     // }
+
+    // +++++ queue management of native colorspace frames
+    // TODO
+	if (uvc_frame_.data != nullptr) {
+        delete [] uvc_frame_.data;
+        uvc_frame_.data = nullptr;
+    }
+    uvc_frame_.data_bytes = 0;
+    uvc_frame_.actual_bytes = 0;
+    uvc_frame_.width = 0;
+    uvc_frame_.height = 0;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
+
+    if (rgb_frame_.data != nullptr) {
+        delete [] rgb_frame_.data;
+        rgb_frame_.data = nullptr;
+    }
+    rgb_frame_.data = nullptr;
+    rgb_frame_.data_bytes = 0;
+    rgb_frame_.actual_bytes = 0;
+    rgb_frame_.width = 0;
+    rgb_frame_.height = 0;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
+    // ---- queue management of native colorspace frames
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
 }
@@ -783,6 +861,31 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return 1;
     }
+
+    // +++++ queue management of native colorspace frames
+    // TODO 
+    uvc_frame_.data_bytes = 2 * enumerated_width * enumerated_height;
+    uvc_frame_.actual_bytes = 2 * enumerated_width * enumerated_height;
+    uvc_frame_.width = enumerated_width;
+    uvc_frame_.height = enumerated_height;
+    uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
+    uvc_frame_.step = 0;
+    uvc_frame_.sequence = 0;
+    uvc_frame_.capture_time.tv_sec = 0;
+    uvc_frame_.capture_time.tv_usec = 0;
+    uvc_frame_.data = new uint8_t[uvc_frame_.data_bytes];
+
+    rgb_frame_.data_bytes = 3 * enumerated_width * enumerated_height;
+    rgb_frame_.actual_bytes = 3 * enumerated_width * enumerated_height;
+    rgb_frame_.width = enumerated_width;
+    rgb_frame_.height = enumerated_height;
+    rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
+    rgb_frame_.step = 0;
+    rgb_frame_.sequence = 0;
+    rgb_frame_.capture_time.tv_sec = 0;
+    rgb_frame_.capture_time.tv_usec = 0;
+    rgb_frame_.data = new uint8_t[rgb_frame_.data_bytes];
+    // ----- queue management of native colorspace frames
 
     VideoGetFormat(&device_);
 
@@ -1652,6 +1755,10 @@ int Camera::VideoQueryCap(Device* device, unsigned int *capabilities)
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
     sync_log_->Log("ioctl VIDIOC_QUERYCAP");
 
+    /* https://www.kernel.org/doc/html/v4.15/media/uapi/v4l/vidioc-querycap.html
+       TODO capture capabilities in object
+    */
+
     memset(&cap, 0, sizeof cap);
     ret = ioctl(device->fd, VIDIOC_QUERYCAP, &cap);
     if (ret < 0) {
@@ -1878,9 +1985,35 @@ int Camera::UvcV4l2GetFrame(void)
     // try libuvc macros
     // uvc_error_t uvc_yuyv2rgb(uvc_frame_t *in, uvc_frame_t *out)
 
+
 // TODO tmp raw v4l2 pull
 #if 1
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","RAW V4LW BUFFER PULL");
+
+    CameraFrame frame = uvc_frame_;
+    uint8_t* yuyv_buffer = frame.data;
+
+    // TODO place in queue
+    memcpy(yuyv_buffer, buffer, width*height*2);
+
+    // +++++ place color transform in client
+    // TODO
+
+    uint8_t *pyuv = uvc_frame_.data;
+    uint8_t* prgb = rgb_frame_.data;
+
+    // TODO allocation units for stride
+    uint8_t *prgb_end = prgb + (width*3*height);
+
+    // utilize libuvc yuv->rgb library
+    while (prgb < prgb_end) {
+        IYUYV2RGB_8(pyuv, prgb);
+
+        prgb += 3 * 8;
+        pyuv += 2 * 8;
+    }
+    // ----- place color transform in client
+
 #else
     uint8_t *pyuv = buffer;
 // TODO initally return yuv and decode in opencv module

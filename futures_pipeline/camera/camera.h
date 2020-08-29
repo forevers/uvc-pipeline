@@ -50,6 +50,50 @@ struct CameraConfig {
     int fps;
 };
 
+// +++++ from android project
+
+typedef enum camera_frame_format {
+    CAMERA_FRAME_FORMAT_UNKNOWN = 0,
+    // supported webcam format
+    CAMERA_FRAME_FORMAT_YUYV = 1,
+    CAMERA_FRAME_FORMAT_MJPEG = 2,
+    // 32-bit RGBA
+    CAMERA_FRAME_FORMAT_RGBX = 3,
+    /** Raw grayscale images */
+    CAMERA_FRAME_FORMAT_GRAY_8 = 4,
+    CAMERA_FRAME_FORMAT_GRAY_16 = 5,
+
+    CAMERA_FRAME_FORMAT_RGB = 6,
+
+    /** Number of formats understood */
+    CAMERA_FRAME_FORMAT_COUNT,
+} CameraFormat;
+
+struct CameraFrame {
+
+    /** image data */
+    uint8_t* data;
+    /** expected size of image data buffer */
+    size_t data_bytes;
+    /** actual received data of image frame */
+    size_t actual_bytes;
+    /** image width */
+    uint32_t width;
+    /** image height */
+    uint32_t height;
+    /** pixel data format */
+    CameraFormat frame_format;
+    /** bytes per horizontal line */
+    size_t step;
+    /** frame number */
+    uint32_t sequence;
+    /** estimate of system time when the device started capturing the image */
+    struct timeval capture_time;
+} ;
+
+// ----- from android project
+
+
 class Camera : public ICameraControl {
 
 public:
@@ -154,4 +198,8 @@ private:
 
     static const V4l2FormatInfo pixel_formats_[];
     static const Field fields_[];
+
+    /* TODO port frame queue */
+    CameraFrame uvc_frame_;
+    CameraFrame rgb_frame_;
 };
