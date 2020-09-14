@@ -1,4 +1,6 @@
-#pragma once
+//#pragma once
+#ifndef CAMERA_H
+#define CAMERA_H
 
 //#include <jni.h>
 //#include <pthread.h>
@@ -119,6 +121,9 @@ public:
     int UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_node, int enumerated_width, int enumerated_height/*, int actual_width, int actual_height*/) override;
     int UvcV4l2Exit(void) override;
 
+    /* blocking client frame get ... pulls from end of queue */
+    bool GetFrame(uint8_t** frame);
+
 private:
 
     /* return number of cameras detected */
@@ -191,15 +196,29 @@ private:
     //WebcamFifo* webcam_fifo_;
 
     Device device_;
-    // TODO place under sync control
-    bool is_running_;
-
-    SyncLog* sync_log_;
 
     static const V4l2FormatInfo pixel_formats_[];
     static const Field fields_[];
 
-    /* TODO port frame queue */
+    // TODO output frame queue
+    // cheat with bool for now
+    bool frame_avail_;
+    std::mutex frame_avail_mtx_;
+    std::condition_variable frame_avail_cv_;
+
+    /* V4L2 userspace frame puller thread */ 
+    void FramePull(int width, int height);
+    // TODO port frame queue
+    std::thread* frame_pull_thread_;
+    // TODO place under sync control
+    bool request_start_;
+//    bool request_stop_;
+    bool is_running_;
+    std::mutex frame_pull_thread_mutex_;
     CameraFrame uvc_frame_;
     CameraFrame rgb_frame_;
+    int width_;
+    int height_;
 };
+
+#endif // CAMERA_H

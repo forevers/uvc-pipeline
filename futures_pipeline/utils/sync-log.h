@@ -16,7 +16,7 @@ public:
     template<class... Args>
     void LogV(Args... args)
     {
-        (std::cout << ... << args) << "\n";
+        (std::cout << ... << args) << "\n" << std::flush;
     };
 
 private:

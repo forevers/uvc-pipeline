@@ -38,8 +38,13 @@ using namespace std;
 #include <sys/mman.h>
 
 // TODO client to chose from enumerated json presented cameraS
-CameraConfig camera_config = {2, 640, 640, 480, 30};
-
+CameraConfig camera_config = {2, 640, 640, 480, 640*480*3, 30};
+    int bytes_per_pixel;
+    int width_enumerated;
+    int width_actual;
+    int height;
+    int bytes_per_row;
+    int fps;
 
 shared_ptr<Output> async_function(shared_ptr<Input> input)
 {
@@ -168,9 +173,14 @@ static inline unsigned char sat(int i) {
 // ----- transform macros
 
 Camera::Camera() :
-    synclog_(SyncLog::GetLog()),
     detected_{false},
-    is_running_{false}
+    synclog_(SyncLog::GetLog()),
+    frame_avail_{false},
+    frame_pull_thread_{nullptr},
+    request_start_{false},
+//    request_stop_{false},
+    is_running_{false},
+    frame_pull_thread_mutex_{}
         // : uvc_fd_(0),
         //   usb_fs_(nullptr),
         //   camera_context_(nullptr),
@@ -190,7 +200,7 @@ Camera::Camera() :
         cout<<"no cameras detected"<<endl;
     }
 
-    sync_log_= SyncLog::GetLog();
+    // synclog_= SyncLog::GetLog();
 
     // +++++ move to queue
     // TODO keep camera source queing in native aquired format (probably yuyv)
@@ -832,7 +842,7 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return 1;
         } else {
-            sync_log_->Log("video_has_fd() success");
+            synclog_->Log("video_has_fd() success");
         }
     }
 
@@ -932,7 +942,7 @@ int Camera::UvcV4l2Exit(void) {
     /* joing */
 
     /* Stop streaming. */
-    VideoEnable(&device_, 0);
+    // VideoEnable(&device_, 0);
 
     VideoFreeBuffers(&device_);
 
@@ -1062,7 +1072,7 @@ int Camera::VideoSetFormat(Device* device, unsigned int w, unsigned int h,
         fmt.fmt.pix.bytesperline = stride;
     }
 
-    sync_log_->Log("***** VIDIOC_S_FMT *****");
+    synclog_->Log("***** VIDIOC_S_FMT *****");
     
     ret = ioctl(device->fd, VIDIOC_S_FMT, &fmt);
     if (ret < 0) {
@@ -1075,7 +1085,7 @@ int Camera::VideoSetFormat(Device* device, unsigned int w, unsigned int h,
         stringstream ss;
         ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
         ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
-        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<dec<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
         ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
         ss<<", colorspace : "<<hex<<"0x"<<fmt.fmt.pix_mp.colorspace;
         ss<<", planes : "<<fmt.fmt.pix_mp.num_planes;
@@ -1089,9 +1099,10 @@ int Camera::VideoSetFormat(Device* device, unsigned int w, unsigned int h,
         stringstream ss;
         ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
         ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
-        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<dec<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
         ss<<", stride : "<<fmt.fmt.pix.bytesperline;
         ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        ss<<", buffer size :"<<fmt.fmt.pix.sizeimage;
         synclog_->LogV(ss.str());
     }
 
@@ -1211,9 +1222,10 @@ int Camera::VideoGetFormat(Device* device)
         stringstream ss;
         ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
         ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
-        ss<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        ss<<dec<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
         ss<<", stride : "<<fmt.fmt.pix.bytesperline;
         ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        ss<<", buffer size :"<<fmt.fmt.pix.sizeimage;
         synclog_->Log(ss.str());
     }
 
@@ -1234,31 +1246,31 @@ int Camera::VideoSetFramerate(Device* device, v4l2_fract* time_per_frame)
 
     ret = ioctl(device->fd, VIDIOC_G_PARM, &parm);
     if (ret < 0) {
-        sync_log_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        synclog_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return ret;
     }
 
-    sync_log_->Log("Current frame rate: "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
+    synclog_->Log("Current frame rate: "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
 
     parm.parm.capture.timeperframe.numerator = time_per_frame->numerator;
     parm.parm.capture.timeperframe.denominator = time_per_frame->denominator;
 
     ret = ioctl(device->fd, VIDIOC_S_PARM, &parm);
     if (ret < 0) {
-        sync_log_->Log("Unable to set frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        synclog_->Log("Unable to set frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return ret;
     }
 
     ret = ioctl(device->fd, VIDIOC_G_PARM, &parm);
     if (ret < 0) {
-        sync_log_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        synclog_->Log("Unable to get frame rate: "+string(strerror(errno))+" ("+to_string(errno)+")");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit\n");
         return ret;
     }
 
-    sync_log_->Log("Frame rate set : "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
+    synclog_->Log("Frame rate set : "+to_string(parm.parm.capture.timeperframe.numerator)+"/"+to_string(parm.parm.capture.timeperframe.denominator));
     
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
     return 0;
@@ -1274,7 +1286,7 @@ int Camera::VideoSetQuality(Device* device, unsigned int quality)
     int ret;
 
     if (quality == (unsigned int)-1) {
-        sync_log_->Log(to_string(__LINE__)+" > invalid quality setting : "+to_string(quality));
+        synclog_->Log(to_string(__LINE__)+" > invalid quality setting : "+to_string(quality));
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return 0;
     }
@@ -1287,20 +1299,20 @@ int Camera::VideoSetQuality(Device* device, unsigned int quality)
 
             These ioctls are deprecated. New drivers and applications should use JPEG class controls for image quality and JPEG markers control.
     */
-    sync_log_->Log("***** VIDIOC_S_JPEGCOMP *****");
+    synclog_->Log("***** VIDIOC_S_JPEGCOMP *****");
 
     ret = ioctl(device->fd, VIDIOC_S_JPEGCOMP, &jpeg);
     if (ret < 0) {
-        sync_log_->Log("Unable to set quality to "+to_string(quality)+": "+strerror(errno)+" ("+to_string(errno)+")");
+        synclog_->Log("Unable to set quality to "+to_string(quality)+": "+strerror(errno)+" ("+to_string(errno)+")");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return ret;
     }
 
-    sync_log_->Log("***** VIDIOC_G_JPEGCOMP *****");
+    synclog_->Log("***** VIDIOC_G_JPEGCOMP *****");
 
     ret = ioctl(device->fd, VIDIOC_G_JPEGCOMP, &jpeg);
     if (ret >= 0)
-        sync_log_->Log("Quality set to "+to_string(jpeg.quality));
+        synclog_->Log("Quality set to "+to_string(jpeg.quality));
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
     return 0;
@@ -1323,7 +1335,7 @@ int Camera::VideoPrepareCapture(Device*device,
     /* Allocate and map buffers. */
     padding = (fill & BUFFER_FILL_PADDING) ? 4096 : 0;
     if ((ret = VideoAllocBuffers(device, nbufs, offset, padding)) < 0) {
-        sync_log_->Log("video_alloc_buffers() failure");
+        synclog_->Log("video_alloc_buffers() failure");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return ret;
     }
@@ -1337,14 +1349,14 @@ int Camera::VideoPrepareCapture(Device*device,
     //         return ret;
     //     }
     // TODO remove support for video output
-        sync_log_->Log("VIDEO OUTPUT NOT SUPPORTED");
+        synclog_->Log("VIDEO OUTPUT NOT SUPPORTED");
     }
 
     /* Queue the buffers. */
     for (i = 0; i < device->nbufs; ++i) {
         ret = VideoQueueBuffer(device, i, fill);
         if (ret < 0) {
-            sync_log_->Log("video_queue_buffer() failure");
+            synclog_->Log("video_queue_buffer() failure");
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return ret;
         }
@@ -1373,12 +1385,12 @@ int Camera::VideoAllocBuffers(Device* device, int nbufs, unsigned int offset, un
 
     ret = ioctl(device->fd, VIDIOC_REQBUFS, &rb);
     if (ret < 0) {
-        sync_log_->Log("Unable to request buffers: "+string(strerror(errno))+" ("+to_string(errno)+")");
+        synclog_->Log("Unable to request buffers: "+string(strerror(errno))+" ("+to_string(errno)+")");
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return ret;
     }
 
-    sync_log_->Log(to_string(rb.count)+" buffers requested.");
+    synclog_->Log(to_string(rb.count)+" buffers requested.");
 
     buffers = (buffer*)malloc(rb.count * sizeof buffers[0]);
     if (buffers == NULL) {
@@ -1399,16 +1411,16 @@ int Camera::VideoAllocBuffers(Device* device, int nbufs, unsigned int offset, un
         buf.length = VIDEO_MAX_PLANES;
         buf.m.planes = planes;
 
-        sync_log_->Log(to_string(__LINE__)+" > ***** VIDIOC_QUERYBUF *****");
+        synclog_->Log(to_string(__LINE__)+" > ***** VIDIOC_QUERYBUF *****");
 
         ret = ioctl(device->fd, VIDIOC_QUERYBUF, &buf);
         if (ret < 0) {
-            sync_log_->Log("Unable to query buffer "+to_string(i)+": "+string(strerror(errno))+")"+to_string(errno)+")");
+            synclog_->Log("Unable to query buffer "+to_string(i)+": "+string(strerror(errno))+")"+to_string(errno)+")");
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return ret;
         }
         GetTsFlags(buf.flags, &ts_type, &ts_source);
-        sync_log_->Log("length: "+to_string(buf.length)+"offset: "+to_string(buf.m.offset)+
+        synclog_->Log("length: "+to_string(buf.length)+"offset: "+to_string(buf.m.offset)+
             "timestamp type/source: "+string(ts_type)+"/"+ts_source);
 
         buffers[i].idx = i;
@@ -1484,12 +1496,12 @@ int Camera::VideoBufferMmap(Device* dev, struct buffer* buffer, struct v4l2_buff
             offset = v4l2buf->m.offset;
         }
 
-        sync_log_->Log("***** mmap *****");
+        synclog_->Log("***** mmap *****");
 
         buffer->mem[i] = (uint8_t*)mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED,
                       dev->fd, offset);
         if (buffer->mem[i] == MAP_FAILED) {
-            sync_log_->Log("Unable to map buffer "+to_string(buffer->idx)+"/"+to_string(i)+": "+strerror(errno)+"("+to_string(errno)+")");
+            synclog_->Log("Unable to map buffer "+to_string(buffer->idx)+"/"+to_string(i)+": "+strerror(errno)+"("+to_string(errno)+")");
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return -1;
         }
@@ -1497,7 +1509,7 @@ int Camera::VideoBufferMmap(Device* dev, struct buffer* buffer, struct v4l2_buff
         buffer->size[i] = length;
         buffer->padding[i] = 0;
 
-        sync_log_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"mapped at address "+to_string(long(buffer->mem[i])));
+        synclog_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"mapped at address "+to_string(long(buffer->mem[i])));
     }
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit\n");
@@ -1523,7 +1535,7 @@ int Camera::VideoBufferAllocUserptr(Device* device, struct buffer *buffer, struc
         ret = posix_memalign((void**)(&buffer->mem[i]), page_size,
                      length + offset + padding);
         if (ret < 0) {
-            sync_log_->Log("Unable to allocate buffer "+to_string(buffer->idx)+"/"+to_string(i)+" "+to_string(ret));
+            synclog_->Log("Unable to allocate buffer "+to_string(buffer->idx)+"/"+to_string(i)+" "+to_string(ret));
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return -ENOMEM;
         }
@@ -1532,7 +1544,7 @@ int Camera::VideoBufferAllocUserptr(Device* device, struct buffer *buffer, struc
         buffer->size[i] = length;
         buffer->padding[i] = padding;
 
-        sync_log_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"allocated at address "+to_string(long(buffer->mem[i])));
+        synclog_->Log("Buffer "+to_string(buffer->idx)+"/"+to_string(i)+"allocated at address "+to_string(long(buffer->mem[i])));
     }
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
@@ -1599,7 +1611,7 @@ int Camera::VideoQueueBuffer(Device* device, int index, BufferFillMode fill)
         }
     }
 
-    sync_log_->Log(to_string(__LINE__)+" > ***** VIDIOC_QBUF *****");
+    synclog_->Log(to_string(__LINE__)+" > ***** VIDIOC_QBUF *****");
 
     ret = ioctl(device->fd, VIDIOC_QBUF, &buf);
     if (ret < 0)
@@ -1616,7 +1628,7 @@ int Camera::VideoEnable(Device* device, int enable)
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","enter");
 
-    sync_log_->Log("***** "+string((enable ? "VIDIOC_STREAMON" : "VIDIOC_STREAMOFF"))+" *****");
+    synclog_->Log("***** "+string((enable ? "VIDIOC_STREAMON" : "VIDIOC_STREAMOFF"))+" *****");
     
     ret = ioctl(device->fd, enable ? VIDIOC_STREAMON : VIDIOC_STREAMOFF, &type);
     if (ret < 0) {
@@ -1668,7 +1680,7 @@ int Camera::VideoFreeBuffers(Device* device)
         return ret;
     }
 
-    sync_log_->Log(to_string(device->nbufs)+" buffers released");
+    synclog_->Log(to_string(device->nbufs)+" buffers released");
 
     free(device->buffers);
     device->nbufs = 0;
@@ -1753,7 +1765,7 @@ int Camera::VideoQueryCap(Device* device, unsigned int *capabilities)
     int ret;
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
-    sync_log_->Log("ioctl VIDIOC_QUERYCAP");
+    synclog_->Log("ioctl VIDIOC_QUERYCAP");
 
     /* https://www.kernel.org/doc/html/v4.15/media/uapi/v4l/vidioc-querycap.html
        TODO capture capabilities in object
@@ -1767,20 +1779,20 @@ int Camera::VideoQueryCap(Device* device, unsigned int *capabilities)
     }
 
     ss<<"cap.capabilities : "<<hex<<"0x"<<cap.capabilities;
-    sync_log_->Log(ss.str());
+    synclog_->Log(ss.str());
     ss.str(string());
     ss<<"cap.device_caps : "<<hex<<"0x"<<cap.device_caps;
-    sync_log_->Log(ss.str());
+    synclog_->Log(ss.str());
 
     *capabilities = cap.capabilities & V4L2_CAP_DEVICE_CAPS ? cap.device_caps : cap.capabilities;
 
     ss.str(string());
     ss<<"*capabilities : "<<hex<<"0x"<<*capabilities;
-    sync_log_->Log(ss.str());
+    synclog_->Log(ss.str());
 
     string cap_card_str((char*)(cap.card), sizeof(cap.card)/sizeof(uint8_t));
     string cap_bus_info_str((char*)(cap.bus_info), sizeof(cap.bus_info)/sizeof(uint8_t));
-    sync_log_->Log("Device "+cap_card_str+" on "+cap_bus_info_str+" is a video "+
+    synclog_->Log("Device "+cap_card_str+" on "+cap_bus_info_str+" is a video "+
         (VideoIsCapture(device) ? "capture" : "output")+" ("+ (VideoIsMplane(device) ? "with" : "without")+
         " mplanes device)");
 
@@ -1795,16 +1807,16 @@ int Camera::CapGetBufType(unsigned int capabilities)
 
     /* select the capability to use */
     if (capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
-        sync_log_->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE\nexit");
+        synclog_->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE\nexit");
         return V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     } else if (capabilities & V4L2_CAP_VIDEO_OUTPUT_MPLANE) {
-        sync_log_->Log("V4L2_CAP_VIDEO_OUTPUT_MPLANE\exit");
+        synclog_->Log("V4L2_CAP_VIDEO_OUTPUT_MPLANE\exit");
         return V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     } else if (capabilities & V4L2_CAP_VIDEO_CAPTURE) {
-        sync_log_->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE\nexit");
+        synclog_->Log("V4L2_BUF_TYPE_VIDEO_CAPTURE\nexit");
         return  V4L2_BUF_TYPE_VIDEO_CAPTURE;
     } else if (capabilities & V4L2_CAP_VIDEO_OUTPUT) {
-        sync_log_->Log("V4L2_CAP_VIDEO_OUTPUT\nexit");
+        synclog_->Log("V4L2_CAP_VIDEO_OUTPUT\nexit");
         return V4L2_BUF_TYPE_VIDEO_OUTPUT;
     } else {
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","Device supports neither capture nor output.\nexit");
@@ -1868,32 +1880,146 @@ const char* Camera::V4l2FormatName(unsigned int fourcc)
 //     return result;
 // }
 
+
+bool Camera::GetFrame(uint8_t** frame)
+{
+    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+
+    // TODO replace with circ buffer tail read and release
+    unique_lock<std::mutex> lk(frame_avail_mtx_);
+    frame_avail_cv_.wait(lk, [this]{return frame_avail_;});
+    *frame = rgb_frame_.data;
+
+    frame_avail_ = false;
+    lk.unlock();
+
+    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+
+    // TODO false or other EOS signal here ?
+    return true;
+}
+
+void Camera::FramePull(__attribute__((unused)) int width, __attribute__((unused)) int height)
+{
+    request_start_ = false;
+    is_running_ = true;
+
+    /* test v4l2 frame pull */
+    // temp test 5 seconds of 30 fps
+    // long num_frames_to_capture = 30;//5*30;
+    long num_frames_to_capture = 0;
+
+    while (IsRunning()) {
+
+        if (0 != UvcV4l2GetFrame()) {
+            SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","UvcV4l2GetFrame() failure");
+            // break;
+            is_running_ = false;
+            // TODO validate v4l2 termination errno
+        }
+        {
+            lock_guard<std::mutex> lk(frame_avail_mtx_);
+            frame_avail_ = true;
+        }
+        frame_avail_cv_.notify_one();
+
+        SyncLog::GetLog()->LogV("frame # : ", num_frames_to_capture++);
+
+        // if (num_frames_to_capture > 0) {
+        //     num_frames_to_capture--;
+        // } else {
+        //     SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","num_frames_to_capture == 0");
+        // }
+
+        // if (0 == num_frames_to_capture) {
+        //     /* Stop streaming. */
+        //     if (!Stop()) {
+        //         SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() camera");
+        //         break;
+        //     } else {
+        //         SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() failure");
+        //     }
+        // }
+
+    }
+}
+
+
 int Camera::Start() 
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
 
-    std::cout << "FUTURE - ASYNC EXAMPLE" << std::endl;
+    int ret = 0;
 
-    // create promise ... can be issued anywhere in a context ... not just return value
-    // vector<future<shared_ptr<Output>>> future_vec;
+    if (!IsRunning()) {
 
-    // future from async
-    for (int64_t instance = 0; instance < 16; instance++) {
-        auto input = make_shared<Input>(instance % 0x10);
-        input->load_ = instance;
-        future<shared_ptr<Output>> future_0 = std::async(async_function, input);
-        future_vec_.push_back(move(future_0));
+        // create promise ... can be issued anywhere in a context ... not just return value
+        // vector<future<shared_ptr<Output>>> future_vec;
+
+        // future from async
+        for (int64_t instance = 0; instance < 16; instance++) {
+            auto input = make_shared<Input>(instance % 0x10);
+            input->load_ = instance;
+            future<shared_ptr<Output>> future_0 = std::async(async_function, input);
+            future_vec_.push_back(move(future_0));
+        }
+
+        // run some other routines ...
+        //other_routine(1);
+
+        for (auto& elem : future_vec_) {
+            auto val = elem.get();
+            synclog_->Log("got instance: "+std::to_string(val->instance_));
+            val = nullptr;
+        }
+
+        // TODO dev node and camera config params to be passed in
+        string device_node_string{"/dev/video0"};
+        int enumerated_width{640};
+        int enumerated_height{480};
+        if (!UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
+            cout<<"UvcV4l2Init() success"<<endl;
+
+            // TODO enum into post_request_
+            request_start_ = true;
+
+            // Start a new worker thread.
+            frame_pull_thread_ = new thread(
+            [this]
+            {
+                FramePull(width_, height_);
+            });
+
+            // /* test v4l2 frame pull */
+            // // temp test 5 seconds of 30 fps
+            // long num_frames_to_capture = 30;//5*30;
+            // while (!IsRunning()) {
+
+            //     if (0 != camera->UvcV4l2GetFrame()) {
+            //         SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","UvcV4l2GetFrame() failure");
+            //         break;
+            //     }
+            //     if (num_frames_to_capture > 0) {
+            //         num_frames_to_capture--;
+            //     } else {
+            //         SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","num_frames_to_capture == 0");
+            //     }
+            //     if (0 == num_frames_to_capture) {
+            //         /* Stop streaming. */
+            //         SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() camera");
+            //         if (camera->Stop()) {
+            //             SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() failure");
+            //         }
+            //     }
+            // }
+
+        } else {
+            cout<<"UvcV4l2Init() failure"<<endl;
+        }
+    } else {
+        SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","stop camera before starting");
+        ret = -1;
     }
-
-    // run some other routines ...
-    //other_routine(1);
-
-    for (auto& elem : future_vec_) {
-        auto val = elem.get();
-        sync_log_->Log("got instance: "+std::to_string(val->instance_));
-        val = nullptr;
-    }
-
     // ENTER_(WEBCAM_TAG);
 
     // int result = EXIT_FAILURE;
@@ -1902,11 +2028,11 @@ int Camera::Start()
     // }
     
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
-    return 0;
+    return ret;
 }
 
 int Camera::Stop() {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","*************entry***********");
 
     // if (camera_device_handle_) {
     //     webcam_fifo_->StopFrameAcquisition();
@@ -1931,6 +2057,20 @@ int Camera::Stop() {
     //     free(usb_fs_);
     //     usb_fs_ = nullptr;
     // }
+
+    /* Stop streaming. */
+    int ret;
+    if (0 != (ret = VideoEnable(&device_, 0))) {
+        synclog_->LogV("[",__func__,": ",__LINE__,"]: ","VideoEnable() failure");
+        return -1;
+    }
+
+    if (frame_pull_thread_ && frame_pull_thread_->joinable()) {
+        frame_pull_thread_->join();
+    }
+
+    // release resources
+    UvcV4l2Exit();
 
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
     return 0;
@@ -1962,9 +2102,20 @@ int Camera::UvcV4l2GetFrame(void)
 
     ret = ioctl(device_.fd, VIDIOC_DQBUF, &buf);
     if (ret < 0) {
+
         if (errno != EIO) {
-            synclog_->LogV("[",__func__,": ",__LINE__,"]: ","Unable to dequeue buffer: %s (%d).\n", strerror(errno), errno);
-            return -1;
+        //     stringstream ss;
+        // ss<<"Video format set: "<<V4l2FormatName(fmt.fmt.pix_mp.pixelformat);
+        // ss<<"("<<hex<<"0x"<<fmt.fmt.pix_mp.pixelformat<<") ";
+        // ss<<dec<<fmt.fmt.pix_mp.width<<"x"<<fmt.fmt.pix_mp.height;
+        // ss<<", field "<< V4l2FieldName((v4l2_field)fmt.fmt.pix_mp.field);
+        // ss<<", colorspace : "<<hex<<"0x"<<fmt.fmt.pix_mp.colorspace;
+        // ss<<", planes : "<<fmt.fmt.pix_mp.num_planes;
+        // synclog_->Log(ss.str());
+
+            synclog_->LogV("[",__func__,": ",__LINE__,"]: "+string("Unable to dequeue buffer: ")+strerror(errno)+" ("+to_string(errno)+")");
+            rgb_frame_.data = nullptr;
+            return errno;
         }
         buf.type = device_.type;
         buf.memory = device_.memtype;
@@ -1979,8 +2130,8 @@ int Camera::UvcV4l2GetFrame(void)
 
     int width = camera_config.width_actual;
     int height = camera_config.height;
-    int bytes_per_pixel = camera_config.bytes_per_pixel;
-    int bytes_per_row = bytes_per_pixel * width;
+//    int bytes_per_pixel = camera_config.bytes_per_pixel;
+//    int bytes_per_row = bytes_per_pixel * width;
 
     // try libuvc macros
     // uvc_error_t uvc_yuyv2rgb(uvc_frame_t *in, uvc_frame_t *out)
@@ -2043,6 +2194,9 @@ int Camera::UvcV4l2GetFrame(void)
     }
 #endif
 #endif /* TODO tmp raw v4l2 pull */
+
+    /* signal waiting clients of frame availability */
+
 
     BufferFillMode fill_mode = BUFFER_FILL_NONE;
     ret = VideoQueueBuffer(&device_, buf.index, fill_mode);

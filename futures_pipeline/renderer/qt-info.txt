@@ -1,0 +1,67 @@
+https://doc.qt.io/qt-5/cameraoverview.html
+
++++++ raw rendering
+
+For advanced usage (like processing viewfinder frames as they come, to detect objects or patterns), 
+you can also derive from QAbstractVideoSurface and set that as the viewfinder for the QCamera object. 
+In this case you will need to render the viewfinder image yourself.
+
+camera = new QCamera;
+mySurface = new MyVideoSurface;
+camera->setViewfinder(mySurface);
+
+camera->start();
+// MyVideoSurface::present(..) will be called with viewfinder frames
+
+----- raw rendering
+
++++++ orientation
+
+// Assuming a QImage has been created from the QVideoFrame that needs to be presented
+QImage videoFrame;
+QCameraInfo cameraInfo(camera); // needed to get the camera sensor position and orientation
+
+// Get the current display orientation
+const QScreen *screen = QGuiApplication::primaryScreen();
+const int screenAngle = screen->angleBetween(screen->nativeOrientation(), screen->orientation());
+
+int rotation;
+if (cameraInfo.position() == QCamera::BackFace) {
+    rotation = (cameraInfo.orientation() - screenAngle) % 360;
+} else {
+    // Front position, compensate the mirror
+    rotation = (360 - cameraInfo.orientation() + screenAngle) % 360;
+}
+
+// Rotate the frame so it always shows in the correct orientation
+videoFrame = videoFrame.transformed(QTransform().rotate(rotation));
+
+----- orientation
+
++++++ qt5 install on 18.04
+
+https://stackoverflow.com/questions/48147356/install-qt-on-ubuntu
+
+sudo apt-get install build-essential
+
+// qy creator and designer installed cleanly
+
+----- qt5 install on 18.04
+
+
++++++ CameraDemo
+
+19:29:27: Running steps for project CameraDemo...
+19:29:27: Starting: "/usr/lib/qt5/bin/qmake" /home/steve/projects/qt/ex_qtcamera/CameraDemo/CameraDemo.pro -spec linux-g++ CONFIG+=debug CONFIG+=qml_debug
+Project ERROR: Unknown module(s) in QT: multimedia
+19:29:27: The process "/usr/lib/qt5/bin/qmake" exited with code 3.
+Error while building/deploying project CameraDemo (kit: Desktop)
+When executing step "qmake"
+19:29:27: Elapsed time: 00:00.
+
+https://stackoverflow.com/questions/26948466/project-error-unknown-modules-in-qt-multimedia
+
+sudo apt-get install qtmultimedia5dev in synaptic ... pulls in a few other modules
+
+----- CameraDemo
+

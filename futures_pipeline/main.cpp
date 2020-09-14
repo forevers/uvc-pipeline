@@ -188,59 +188,76 @@ int main()
 
     camera->Start();
     {        
-        // TODO scoped code to move to Start()
-        string device_node_string{"/dev/video0"};
-        int enumerated_width{640};
-        int enumerated_height{480};
-        if (!camera->UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
-            cout<<"UvcV4l2Init() success"<<endl;
+    //     // TODO scoped code to move to Start()
+    //     string device_node_string{"/dev/video0"};
+    //     int enumerated_width{640};
+    //     int enumerated_height{480};
+    //     if (!camera->UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
+    //         cout<<"UvcV4l2Init() success"<<endl;
 
-            /* test v4l2 frame pull */
-            // temp test 5 seconds of 30 fps
-            long num_frames_to_capture = 5*30;
-            while (!camera->IsRunning() && num_frames_to_capture) {
+    //         /* test v4l2 frame pull */
+    //         // temp test 5 seconds of 30 fps
+    //         long num_frames_to_capture = 30;//5*30;
+    //         // while (!camera->IsRunning() && num_frames_to_capture) {
+    //         while (!camera->IsRunning()) {
 
-                // if (uvc_mode == UVC_MODE_LIBUSB) {
+    //             // if (uvc_mode == UVC_MODE_LIBUSB) {
 
-                //     //std::this_thread::sleep_for(std::chrono::milliseconds(250));
-                //     // 60fps simulation
-                //     std::this_thread::sleep_for(std::chrono::microseconds(16667));
-                //     {
-                //         std::lock_guard<std::mutex> lock(m_Mutex);
+    //             //     //std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    //             //     // 60fps simulation
+    //             //     std::this_thread::sleep_for(std::chrono::microseconds(16667));
+    //             //     {
+    //             //         std::lock_guard<std::mutex> lock(m_Mutex);
 
-                //         if (m_shall_stop)
-                //         {
-                //             m_message += "Stopped";
-                //             break;
-                //         }
-                //     }
-                // } else {
-                    // {
-                        //std::lock_guard<std::mutex> lock(m_Mutex);
-                        // 4l2 will block, issue signal to release mutex until frame arrives
-                camera->UvcV4l2GetFrame();
-                num_frames_to_capture--;
-            // }
+    //             //         if (m_shall_stop)
+    //             //         {
+    //             //             m_message += "Stopped";
+    //             //             break;
+    //             //         }
+    //             //     }
+    //             // } else {
+    //                 // {
+    //                     //std::lock_guard<std::mutex> lock(m_Mutex);
+    //                     // 4l2 will block, issue signal to release mutex until frame arrives
+    //             if (0 != camera->UvcV4l2GetFrame()) {
+    //                 SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","UvcV4l2GetFrame() failure");
+    //                 break;
+    //             }
+    //             if (num_frames_to_capture > 0) {
+    //                 num_frames_to_capture--;
+    //             } else {
+    //                 SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","num_frames_to_capture == 0");
+    //             }
+    //             if (0 == num_frames_to_capture) {
+    //                 /* Stop streaming. */
+    //                 SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() camera");
+    //                 if (camera->Stop()) {
+    //                     SyncLog::GetLog()->LogV("[",__func__,": ",__LINE__,"]: ","Stop() failure");
+    //                 }
+    //             }
+    //         // }
 
-                // if (m_shall_stop)
-                // {
-                //     m_message += "Stopped";
-                //     break;
-                // }
+    //             // if (m_shall_stop)
+    //             // {
+    //             //     m_message += "Stopped";
+    //             //     break;
+    //             // }
 
-                // TODO signal the  pipeline flush ... blocking for return to indicate all pipe elements are flushed and in stop state
-                // frame_queue_ifc->Signal();
-                // }
-            }
+    //             // TODO signal the  pipeline flush ... blocking for return to indicate all pipe elements are flushed and in stop state
+    //             // frame_queue_ifc->Signal();
+    //             // }
+    //         }
 
-        } else {
-            cout<<"UvcV4l2Init() failure"<<endl;
-        }
+    //     } else {
+    //         cout<<"UvcV4l2Init() failure"<<endl;
+    //     }
+
+        sleep(10);
 
         camera->Stop();
-        {
-            camera->UvcV4l2Exit();
-        }
+        // {
+        //     camera->UvcV4l2Exit();
+        // }
 
 #if 0 // this works
         // obtain camera device node file descriptor
