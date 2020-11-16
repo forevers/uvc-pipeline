@@ -27,6 +27,6 @@ public:
     std::vector<uint8_t> data_[1024];
 
 private:
-    SyncLog* synclog_;
+    std::shared_ptr<SyncLog> synclog_;
 };
 int64_t Input::instances_{0};

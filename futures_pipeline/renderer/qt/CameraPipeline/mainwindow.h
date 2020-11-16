@@ -11,6 +11,7 @@ namespace Ui {
 class MainWindow;
 }
 
+/* worker object for frame processing */
 class Worker : public QObject
 {
     Q_OBJECT
@@ -23,10 +24,16 @@ private:
     QSharedPointer<Camera> camera_;
 
 public slots:
+    /* frame processing */
     void doWork();
 
 signals:
-    void resultReady(uint8_t* frame);
+    /* frame ready for ui rendering */
+    void resultReady(CameraFrame* frame);
+    /* thread termination and self deletion */
+    void finished(void);
+    /* blank ui */
+    void blank();
 };
 
 
@@ -47,16 +54,17 @@ private:
 
     /* frame pull */
     Worker* worker_;
-    QThread pullThread_;
+    QThread* pullThread_;
 
 public slots:
-    void handleResults(uint8_t* frame);
-signals:
-    void operate();
+    /* frame processing */
+    void handleFrame(CameraFrame* frame);
+    /* ui frame blank */
+    void blank();
 
 private slots:
-    void onStartButtonClicked();
-    void onOpenButtonClicked();
+    void onStartStopButtonClicked();
+    void onOpenCloseCameraButtonClicked();
 };
 
 #endif // MAINWINDOW_H

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -9,7 +10,7 @@ class SyncLog
 {
 public:
 
-    static SyncLog* GetLog();
+    static std::shared_ptr<SyncLog> GetLog();
 
     void Log(std::string msg);
 
@@ -22,7 +23,9 @@ public:
 private:
 
     std::mutex log_mtx_;
-    static SyncLog* log_;
+    static std::shared_ptr<SyncLog> log_;
 
+// TODO make private
+public:
     SyncLog();
 };

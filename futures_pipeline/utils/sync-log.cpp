@@ -1,14 +1,14 @@
 #include "sync-log.h"
 
-SyncLog *SyncLog::log_ = 0;
+
+std::shared_ptr<SyncLog> SyncLog::log_ = nullptr;
 
 
-SyncLog* SyncLog::GetLog()
+std::shared_ptr<SyncLog> SyncLog::GetLog()
 {
-    if (!log_) log_ = new SyncLog;
+    if (log_ == nullptr) log_ = std::make_shared<SyncLog>();
     return log_;
 }
-
 
 void SyncLog::Log(std::string msg)
 {

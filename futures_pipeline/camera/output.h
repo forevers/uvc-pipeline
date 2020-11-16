@@ -22,5 +22,5 @@ public:
     std::vector<int8_t> data_[2048];
 
 private:
-    SyncLog* synclog_;
+    std::shared_ptr<SyncLog> synclog_;
 };

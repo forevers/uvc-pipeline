@@ -41,7 +41,9 @@ SOURCES += $$PWD/../../../utils/sync-log.cpp
 INCLUDEPATH += $$PWD/../../../camera
 INCLUDEPATH += $$PWD/../../../camera/include/linux
 INCLUDEPATH += $$PWD/../../../utils
+INCLUDEPATH += $$PWD/../../../utils/queue
 INCLUDEPATH += $$PWD/../../../utils/rapidjson_004e8e6/include
+INCLUDEPATH += $$PWD/../../../utils/boost_1_74_0
 
 FORMS += \
         mainwindow.ui

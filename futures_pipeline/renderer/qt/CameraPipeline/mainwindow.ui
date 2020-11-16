@@ -34,14 +34,17 @@
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0">
        <item>
-        <widget class="QPushButton" name="openButton">
+        <widget class="QPushButton" name="openCloseCameraButton">
          <property name="text">
           <string>open camera</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="startButton">
+        <widget class="QPushButton" name="startStopButton">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
          <property name="text">
           <string>start stream</string>
          </property>

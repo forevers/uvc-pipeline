@@ -1,10 +1,11 @@
 /* 
 compiler options
   g++ -g -O0 -Wunused -std=c++17 -I../utils -pthread -ggdb -lpthread main.cpp ../util/SyncLog.cpp -o async_future_demo
-  clang++ -g -O0 -Wunused-variable -Wunused-parameter -std=c++17 -I$(pwd)/camera/include/linux -I./camera -I./utils -I$(pwd)/utils/rapidjson_004e8e6/include -I./utils -I./utils/rapidjson_004e8e6/include/rapidjson -pthread -lpthread main.cpp ./camera/camera.cpp ./utils/sync-log.cpp ./utils/exec-shell.cpp -o async_future_demo
+  clang++ -g -O0 -Wunused-variable -Wunused-parameter -std=c++17 -I$(pwd)/camera/include/linux -I./camera -I./utils -I./utils/queue -I./utils/boost_1_74_0 -I$(pwd)/utils/rapidjson_004e8e6/include -I./utils/rapidjson_004e8e6/include/rapidjson -pthread -lpthread main.cpp ./camera/camera.cpp ./utils/sync-log.cpp ./utils/exec-shell.cpp -o async_future_demo
 
 valgrind options
   valgrind --leak-check=yes ./async_future_demo 
+  valgrind -v --leak-check=yes --leak-check=full --show-leak-kinds=all  ./async_future_demo 
 */
 // simple demo of thread async-future synchronizationsynchronization
 
@@ -252,7 +253,7 @@ int main()
     //         cout<<"UvcV4l2Init() failure"<<endl;
     //     }
 
-        sleep(10);
+        sleep(3);
 
         camera->Stop();
         // {

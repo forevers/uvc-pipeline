@@ -1,6 +1,4 @@
-//#pragma once
-#ifndef CAMERA_H
-#define CAMERA_H
+#pragma once
 
 //#include <jni.h>
 //#include <pthread.h>
@@ -9,6 +7,7 @@
 
 #include "camera-control-ifc.h"
 #include "output.h"
+#include "frame-queue.h"
 #include "rapidjson/document.h"
 
 //#include "webcam_status_callback.h"
@@ -16,84 +15,9 @@
 //#include "frame_access_registration_ifc.h"
 #include "sync-log.h"
 
+// #include <boost/circular_buffer.hpp>
 
-struct buffer
-{
-    unsigned int idx;
-    unsigned int padding[VIDEO_MAX_PLANES];
-    unsigned int size[VIDEO_MAX_PLANES];
-    uint8_t *mem[VIDEO_MAX_PLANES];
-};
-
-struct V4l2FormatInfo {
-    const char *name;
-    unsigned int fourcc;
-    unsigned char n_planes;
-};
-
-struct Field {
-    const char *name;
-    enum v4l2_field field;
-};
-
-enum BufferFillMode
-{
-    BUFFER_FILL_NONE = 0,
-    BUFFER_FILL_FRAME = 1 << 0,
-    BUFFER_FILL_PADDING = 1 << 1,
-};
-
-struct CameraConfig {
-    int bytes_per_pixel;
-    int width_enumerated;
-    int width_actual;
-    int height;
-    int bytes_per_row;
-    int fps;
-};
-
-// +++++ from android project
-
-typedef enum camera_frame_format {
-    CAMERA_FRAME_FORMAT_UNKNOWN = 0,
-    // supported webcam format
-    CAMERA_FRAME_FORMAT_YUYV = 1,
-    CAMERA_FRAME_FORMAT_MJPEG = 2,
-    // 32-bit RGBA
-    CAMERA_FRAME_FORMAT_RGBX = 3,
-    /** Raw grayscale images */
-    CAMERA_FRAME_FORMAT_GRAY_8 = 4,
-    CAMERA_FRAME_FORMAT_GRAY_16 = 5,
-
-    CAMERA_FRAME_FORMAT_RGB = 6,
-
-    /** Number of formats understood */
-    CAMERA_FRAME_FORMAT_COUNT,
-} CameraFormat;
-
-struct CameraFrame {
-
-    /** image data */
-    uint8_t* data;
-    /** expected size of image data buffer */
-    size_t data_bytes;
-    /** actual received data of image frame */
-    size_t actual_bytes;
-    /** image width */
-    uint32_t width;
-    /** image height */
-    uint32_t height;
-    /** pixel data format */
-    CameraFormat frame_format;
-    /** bytes per horizontal line */
-    size_t step;
-    /** frame number */
-    uint32_t sequence;
-    /** estimate of system time when the device started capturing the image */
-    struct timeval capture_time;
-} ;
-
-// ----- from android project
+#include "camera_types.h"
 
 
 class Camera : public ICameraControl {
@@ -106,8 +30,10 @@ public:
     // CameraControl methods
     //IFrameAccessRegistration* GetFrameAccessIfc(int interface_number) override;
     //int Prepare(int vid, int pid, int fd, int busnum, int devaddr, const char *usbfs) override;
+    // TODO move these into a pipeline interface
     int Start() override;
     int Stop() override;
+
     bool IsRunning() override;
     // +++++ TODO move to pipe interface
     virtual int UvcV4l2GetFrame(void) override;
@@ -122,15 +48,19 @@ public:
     int UvcV4l2Exit(void) override;
 
     /* blocking client frame get ... pulls from end of queue */
+    // TODO temp is straight buffer pull
     bool GetFrame(uint8_t** frame);
+    bool GetFrame(CameraFrame** frame);
+    bool ReturnFrame(CameraFrame* frame);
+    // TODO change to be handled by an frame access ifc destructor signal threads exit barrier test
+    void Release();
 
 private:
-
     /* return number of cameras detected */
     bool DetectCameras();
     bool detected_;
 
-    SyncLog* synclog_;
+    std::shared_ptr<SyncLog> synclog_;
 
     // create promise ... can be issued anywhere in a context ... not just return value
     std::vector<std::future<std::shared_ptr<Output>>> future_vec_;
@@ -200,6 +130,13 @@ private:
     static const V4l2FormatInfo pixel_formats_[];
     static const Field fields_[];
 
+    /* client frame queue */
+    std::shared_ptr<FrameQueue<CameraFrame>> camera_frame_queue_;
+    /* queue frame available conditional signal */
+    std::mutex release_frame_queue_mtx_;
+    bool release_frame_queue_;
+    std::condition_variable release_frame_queue_cv;
+
     // TODO output frame queue
     // cheat with bool for now
     bool frame_avail_;
@@ -208,8 +145,9 @@ private:
 
     /* V4L2 userspace frame puller thread */ 
     void FramePull(int width, int height);
-    // TODO port frame queue
-    std::thread* frame_pull_thread_;
+
+    std::thread frame_pull_thread_;
+
     // TODO place under sync control
     bool request_start_;
 //    bool request_stop_;
@@ -220,5 +158,3 @@ private:
     int width_;
     int height_;
 };
-
-#endif // CAMERA_H
