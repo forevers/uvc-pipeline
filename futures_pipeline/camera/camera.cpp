@@ -1897,6 +1897,8 @@ bool Camera::ReturnFrame(CameraFrame* frame)
 }
 
 
+// TODO use an ifc object within camera. have ifc destructor handle this sync with
+//      and destruction of frame queue.
 void Camera::Release() 
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");

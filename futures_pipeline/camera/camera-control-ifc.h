@@ -7,7 +7,7 @@
 #include <string>
 
 #include "videodev2.h"
-// TODO tailor to android libv4l2and linux v4l2
+// TODO tailor to android libv4l2 and linux v4l2
 struct Device
 {
     int fd;
