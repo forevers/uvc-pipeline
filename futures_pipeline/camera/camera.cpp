@@ -38,15 +38,6 @@ using namespace std;
 // #include <sys/stat.h>
 #include <sys/mman.h>
 
-// TODO client to chose from enumerated json presented cameraS
-CameraConfig camera_config = {2, 640, 640, 480, 640*480*3, 30};
-    int bytes_per_pixel;
-    int width_enumerated;
-    int width_actual;
-    int height;
-    int bytes_per_row;
-    int fps;
-
 shared_ptr<Output> async_function(shared_ptr<Input> input)
 {
     sched_param sch;
@@ -174,7 +165,8 @@ static inline unsigned char sat(int i) {
 // ----- transform macros
 
 Camera::Camera() :
-    detected_{false},
+    camera_capabilities_{nullptr},
+    // detected_{false},
     synclog_(SyncLog::GetLog()),
     camera_frame_queue_{nullptr},
 //    request_stop_{false},
@@ -182,8 +174,9 @@ Camera::Camera() :
     frame_avail_{false},
     request_start_{false},
     is_running_{false},
-    frame_pull_thread_mutex_{}
-    // camera_frame_queue_{nullptr}
+    frame_pull_thread_mutex_{},
+    camera_config_{"none", "none", -1, -1, -1, -1, -1, -1, {0, 0}}
+        // camera_frame_queue_{nullptr}
         // : uvc_fd_(0),
         //   usb_fs_(nullptr),
         //   camera_context_(nullptr),
@@ -194,14 +187,17 @@ Camera::Camera() :
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
 
-    camera_doc_.SetObject();
+    camera_capabilities_ = make_shared<CameraCapabilities>();
 
-    /* v4l2-ctl camera mode detection */
-    if (DetectCameras()) {
-        cout<<"cameras detected"<<endl;
-    } else {
-        cout<<"no cameras detected"<<endl;
-    }
+    // camera_doc_.SetObject();
+
+    // // TODO linux udev rule, android equivalent to detect usb vbus and register/deregister cameras
+    // /* v4l2-ctl camera mode detection */
+    // if (DetectCameras()) {
+    //     cout<<"cameras detected"<<endl;
+    // } else {
+    //     cout<<"no cameras detected"<<endl;
+    // }
 
     // synclog_= SyncLog::GetLog();
 
@@ -374,415 +370,15 @@ void FindAllOccurances(std::vector<size_t>& vec, std::string search_this, std::s
 */
 
 
-bool Camera::DetectCameras() 
-{
-    size_t pos = 0;
-    size_t pos_end = 0;
-
-    string camera_card_type;
-
-    Value camera_array(kArrayType);
-    Document::AllocatorType& allocator = camera_doc_.GetAllocator();
-
-    /* active video device nodes */
-    string device_list = exec("ls -1 /dev/video*");
-    stringstream device_list_ss(device_list);
-
-    /* extract supported rate and resolutions data from camera devices */
-    string device_node;
-    while (device_list_ss >> device_node) {
-
-        Value camera_device_value;
-        camera_device_value.SetObject();
-
-        string list_formats = "v4l2-ctl --device=" + device_node + " -D --list-formats-ext";
-        string device_formats = exec(list_formats.c_str());
-
-        /* /dev/video<x> */
-        Value device_node_val;
-        device_node_val.SetString(device_node.c_str(), device_node.length(), allocator);
-
-        Value camera_card_type_val;
-        pos = 0;
-        string delimiter = "Card type     : ";
-        if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-
-            pos += delimiter.length();
-
-            if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-
-                size_t len = pos_end - pos;
-                camera_card_type = device_formats.substr(pos, len);
-                pos = pos_end;
-                camera_card_type_val.SetString(camera_card_type.c_str(), camera_card_type.length(), allocator);
-            }
-        }
-
-        Value capture_type_array(kArrayType);
-        delimiter = "ioctl: VIDIOC_ENUM_FMT";
-        if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-            
-            pos += delimiter.length();
-
-            int index; 
-            string type, format, name;
-
-            /* ioctl: VIDIOC_ENUM_FMT Index's */
-            delimiter = "Index       : ";
-            while (string::npos != (pos = device_formats.find(delimiter, pos))) {
-
-                pos += delimiter.length();
-                if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-                    size_t len = pos_end - pos;
-                    index = stoi(device_formats.substr(pos, len));
-                    pos = pos_end;
-                }
-
-                delimiter = "Type        : ";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-                        size_t len = pos_end - pos;
-                        type = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
-                }
-
-                delimiter = "Pixel Format: ";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find('\n', pos))) {
-                        size_t len = pos_end - pos;
-                        format = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
-                }
-
-                delimiter = "Name        :";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find('\n', pos))) {
-                        size_t len = pos_end - pos;
-                        name = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
-                }
-
-                /* add capture types */
-                if (!type.compare("Video Capture")) {
-
-                    Value capture_format_value;
-                    capture_format_value.SetObject();
-
-                    Value index_val;
-                    index_val.SetInt(index);
-                    capture_format_value.AddMember("index", index_val, allocator);
-
-                    Value type_val;
-                    type_val.SetString(type.c_str(), type.length(), allocator);
-                    capture_format_value.AddMember("type", type_val, allocator);
-
-                    Value format_val;
-                    format_val.SetString(format.c_str(), format.length(), allocator);
-                    capture_format_value.AddMember("format", format_val, allocator);
-
-                    Value name_val;
-                    name_val.SetString(name.c_str(), name.length(), allocator);
-                    capture_format_value.AddMember("name", name_val, allocator);
-
-                    /* each resolution supports multiple rates */
-                    Value res_rate_array(kArrayType);
-
-                    string res_rate = device_formats.substr(pos);
-                    stringstream res_rate_ss(res_rate);
-                    string line;
-                    string resolution;
-
-                    // TODO change above the getline
-
-                    /* eat a blank line */
-                    getline(res_rate_ss, line);
-                    getline(res_rate_ss, line);
-
-                    while (!res_rate_ss.eof()) {
-                        
-                        Value res_rate_val;
-                        res_rate_val.SetObject();
-
-                        Value resolution_val;
-                        resolution_val.SetObject();
-
-                        Value rate_array(kArrayType);
-
-                        delimiter = "Size: Discrete ";
-                        if (string::npos != (pos = line.find(delimiter))) {
-
-                            resolution = line.substr(pos + delimiter.length());
-                            resolution_val.SetString(resolution.c_str(), resolution.length(), allocator);
-
-                            Value rate_value;
-                            rate_value.SetObject();
-                            do {
-
-                                getline(res_rate_ss, line);
-
-                                delimiter = "(";
-                                if (string::npos != (pos = line.find(delimiter))) {
-
-                                    string rate = line.substr(pos+1, string::npos);
-
-                                    delimiter = ")";
-                                    if (string::npos != (pos_end = rate.find(delimiter))) {
-
-                                        Value rate_value;
-                                        rate_value.SetObject();
-                                        rate_value.SetString(rate.c_str(), rate.length()-1, allocator);
-                                        rate_array.PushBack(rate_value, allocator);
-                                    }
-                                }
-                            } while (string::npos != pos);
-                        } else {
-                            getline(res_rate_ss, line);
-                        }
-
-                        if (rate_array.Size()) {
-                            res_rate_val.AddMember("resolution", resolution_val, allocator);
-                            res_rate_val.AddMember("rates", rate_array, allocator);
-                            res_rate_array.PushBack(res_rate_val, allocator);
-                        }
-                    }
-
-                    if (res_rate_array.Size()) {
-                        capture_format_value.AddMember("res rates", res_rate_array, allocator);
-                        capture_type_array.PushBack(capture_format_value, allocator);
-                    }
-                }
-
-                /* next format */
-                delimiter = "Index       : ";
-
-            } /* end while ioctl: VIDIOC_ENUM_FMT */
-
-            if (capture_type_array.Size()) {
-                camera_device_value.AddMember("device node", device_node_val, allocator);
-                camera_device_value.AddMember("card type", camera_card_type_val, allocator);
-                camera_device_value.AddMember("formats", capture_type_array, allocator);
-            }
-
-            // if (camera_device_value.ObjectEmpty()) {
-            //     cout<<"empty"<<endl;
-            // }
-
-        } /* if more lines for this device node */
-
-        /* only add dev nodes with VIDIOC_ENUM_FMT */
-        if (!camera_device_value.ObjectEmpty()) {
-            camera_array.PushBack(camera_device_value, allocator);
-        }
-
-    } /* while (device_list_ss >> device_node) */
-
-    camera_doc_.AddMember("cameras", camera_array, allocator);
-
-    if (camera_doc_.MemberCount()) {
-        detected_ = true;
-    }
-
-    // {
-        // online schema generator
-        // https://www.liquid-technologies.com/online-json-to-schema-converter
-
-        // schema online validator
-        // https://www.jsonschemavalidator.net/
-
-
-        /* test schema */
-
-        // /* Compile a Document to SchemaDocument */
-        // SchemaDocument schema(camera_doc_);
-
-        // Document d;
-
-        // /* construct a SchemaValidator */
-        // SchemaValidator validator(schema);
-        // // if (!d.Accept(validator)) {
-        // if (!camera_doc_.Accept(validator)) {
-        //     // Input JSON is invalid according to the schema
-        //     // Output diagnostic information
-        //     StringBuffer sb;
-        //     validator.GetInvalidSchemaPointer().StringifyUriFragment(sb);
-        //     printf("Invalid schema: %s\n", sb.GetString());
-        //     printf("Invalid keyword: %s\n", validator.GetInvalidSchemaKeyword());
-        //     sb.Clear();
-        //     validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
-        //     printf("Invalid document: %s\n", sb.GetString());
-        // } else {
-        //     cout<<"schema passes *************"<<endl;
-
-        //     StringBuffer sb;
-        //     // sb.Clear();
-        //     // PrettyWriter<StringBuffer> writer(sb);
-        //     Writer<StringBuffer> writer(sb);
-        //     camera_doc_.Accept(writer);
-        //     puts(sb.GetString());
-        // }
-    // } 
-
-    // // valid schema
-    // {
-    //     rapidjson::Document document;
-    //     document.Parse(g_schema);
-
-    //     rapidjson::SchemaDocument schemaDocument(document);
-    //     rapidjson::SchemaValidator validator(schemaDocument);
-
-    //     /* parse JSON string */
-    //     rapidjson::Document modelDoc;
-    //     modelDoc.Parse(sb.GetString());
-
-    //     if (!modelDoc.Accept(validator)) {
-    //         cout<<"schema invalidated"<<endl;
-    //     } else {
-    //         cout<<"schema validated"<<endl;
-    //     }
-    // }
-
-    // // invalid schema
-    // {
-    //     rapidjson::Document document;
-    //     document.Parse(g_schema_invalid);
-
-    //     rapidjson::SchemaDocument schemaDocument(document);
-    //     rapidjson::SchemaValidator validator(schemaDocument);
-
-    //     rapidjson::Document modelDoc;
-    //     modelDoc.Parse(sb.GetString());
-
-    //     if (!modelDoc.Accept(validator)) {
-    //         cout<<"schema invalidated"<<endl;
-    //     } else {
-    //         cout<<"schema validated"<<endl;
-    //     }
-    // }
-
-    // {
-    //     /* Compile a Document to SchemaDocument */
-    //     SchemaDocument schema(document);
-
-    //     rapidjson::Document sd;
-        
-    //     schema.GetRoot
-    //     sd.Parse(schemaJson.c_str());
-    // }
-
-    return detected_;
-}
-
 string Camera::GetSupportedVideoModes() 
 {
-    StringBuffer sb;
-    PrettyWriter<StringBuffer> writer(sb);
-    camera_doc_.Accept(writer);
-
-    return string(sb.GetString(), sb.GetSize());
-
-    // ENTER_(WEBCAM_TAG);
-
-//     char buf[1024];
-
-//     if (camera_device_handle_) {
-
-//         StringBuffer buffer;
-//         Writer<StringBuffer> writer(buffer);
-
-//         writer.StartObject();
-//         {
-//             if (camera_device_handle_->info->stream_ifs) {
-//                 uvc_streaming_interface_t* stream_if;
-//                 int stream_idx = 0;
-
-//                 writer.String("formats");
-//                 writer.StartArray();
-//                 DL_FOREACH(camera_device_handle_->info->stream_ifs, stream_if)
-//                 {
-//                     ++stream_idx;
-//                     uvc_format_desc_t* fmt_desc;
-//                     uvc_frame_desc_t* frame_desc;
-//                     DL_FOREACH(stream_if->format_descs, fmt_desc)
-//                     {
-//                         writer.StartObject();
-//                         {
-//                             switch (fmt_desc->bDescriptorSubtype) {
-//                                 case UVC_VS_FORMAT_UNCOMPRESSED:
-//                                 case UVC_VS_FORMAT_MJPEG:
-//                                     // only ascii fourcc codes currently accepted
-//                                     if ( isprint(fmt_desc->fourccFormat[0]) && isprint(fmt_desc->fourccFormat[1]) &&
-//                                          isprint(fmt_desc->fourccFormat[2]) && isprint(fmt_desc->fourccFormat[3]) ) {
-
-//                                         writer.String("index");
-//                                         writer.Uint(fmt_desc->bFormatIndex);
-//                                         writer.String("type");
-//                                         writer.Int(fmt_desc->bDescriptorSubtype);
-//                                         writer.String("default");
-//                                         writer.Uint(fmt_desc->bDefaultFrameIndex);
-//                                         writer.String("fourcc");
-//                                         buf[0] = fmt_desc->fourccFormat[0];
-//                                         buf[1] = fmt_desc->fourccFormat[1];
-//                                         buf[2] = fmt_desc->fourccFormat[2];
-//                                         buf[3] = fmt_desc->fourccFormat[3];
-//                                         buf[4] = '\0';
-//                                         writer.String(buf);
-//                                         writer.String("sizes");
-//                                         writer.StartArray();
-//                                         DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
-//                                             writer.StartObject();
-//                                             writer.Key("resolution");
-//                                             snprintf(buf, sizeof(buf), "%dx%d",
-//                                                      frame_desc->wWidth, frame_desc->wHeight);
-//                                             buf[sizeof(buf) - 1] = '\0';
-//                                             writer.String(buf);
-//                                             writer.Key("default_frame_interval");
-//                                             writer.Uint(frame_desc->dwDefaultFrameInterval);
-//                                             writer.Key("interval_type");
-//                                             writer.Uint(frame_desc->bFrameIntervalType);
-//                                             writer.Key("interval_type_array");
-//                                             writer.StartArray();
-//                                             if (frame_desc->bFrameIntervalType) {
-//                                                 for (auto i = 0; i < frame_desc->bFrameIntervalType; i++) {
-//                                                     writer.Uint((frame_desc->intervals)[i]);
-//                                                 }
-//                                             }
-//                                             writer.EndArray();
-//                                             writer.EndObject();
-//                                         }
-//                                         writer.EndArray();
-//                                     }
-//                                     break;
-//                                 default:
-//                                     break;
-//                             }
-//                         }
-//                         writer.EndObject();
-//                     }
-//                 }
-//                 writer.EndArray();
-//             }
-//         }
-//         writer.EndObject();
-//         return strdup(buffer.GetString());
-
-//     } else {
-//         return nullptr;
-//     }
+    return camera_capabilities_->GetSupportedVideoModes();
 }
-
-
-
 
 
 #define V4L_BUFFERS_DEFAULT 8
 #define V4L_BUFFERS_MAX     32
-int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_node, int enumerated_width, int enumerated_height/*, int actual_width, int actual_height*/)
+int Camera::UvcV4l2Init(const CameraConfig& camera_config)
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
 
@@ -805,6 +401,7 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
     unsigned int nbufs = V4L_BUFFERS_DEFAULT;
     //unsigned int buffer_size = 0;
     enum v4l2_field field = V4L2_FIELD_ANY;
+// TOD FPS from json data
     struct v4l2_fract time_per_frame = {1, 30};
     // struct v4l2_fract time_per_frame = {1, 5};
 
@@ -816,7 +413,7 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
 
     string f_optarg;
     /* fourcc */
-    // TODO HC for now, enventually MPEG and others will be supported as enumerated in JSON
+    // TODO HC for now, eventually MPEG and others will be supported as enumerated in JSON
     f_optarg = "YUYV";
 
     info = V4l2FormatByName(f_optarg.c_str());
@@ -829,9 +426,8 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
     synclog_->LogV("fourcc : "+f_optarg);
 
     pixelformat = info->fourcc;
-    synclog_->LogV("enumerated_height : ",to_string(enumerated_height)
-        +", enumerated_width : ",to_string(enumerated_width));
-
+    synclog_->LogV("enumerated_height : ",to_string(camera_config.height_)
+        +", enumerated_width : ",to_string(camera_config.width_enumerated_));
 
     /* number of v4l2 buffers in kernel queue */
     nbufs = 4;
@@ -839,8 +435,8 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
 
     /* video device node */
     if (!VideoHasFd(&device_)) {
-        ret = VideoOpen(&device_, device_node.c_str());
-            /* uvc camera device node at /dev/video<x> */
+        ret = VideoOpen(&device_, camera_config_.camera_dev_node_.c_str());
+        /* uvc camera device node at /dev/video<x> */
         if (ret < 0) {
             synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
             return 1;
@@ -869,7 +465,8 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
     device_.memtype = memtype;
 
     /* Set the video format. */
-    if (VideoSetFormat(&device_, enumerated_width, enumerated_height, pixelformat, stride, field) < 0) {
+    if (VideoSetFormat(&device_, camera_config_.width_enumerated_, camera_config.height_, pixelformat, stride, field) < 0) {
+
         VideoClose(&device_);
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
         return 1;
@@ -877,10 +474,10 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
 
     // +++++ queue management of native colorspace frames
     // TODO 
-    uvc_frame_.data_bytes = 2 * enumerated_width * enumerated_height;
-    uvc_frame_.actual_bytes = 2 * enumerated_width * enumerated_height;
-    uvc_frame_.width = enumerated_width;
-    uvc_frame_.height = enumerated_height;
+    uvc_frame_.data_bytes = 2 * camera_config.width_enumerated_ * camera_config.height_;
+    uvc_frame_.actual_bytes = 2 * camera_config.width_enumerated_ * camera_config.height_;
+    uvc_frame_.width = camera_config.width_enumerated_;
+    uvc_frame_.height = camera_config.height_;
     uvc_frame_.frame_format = CAMERA_FRAME_FORMAT_YUYV;
     uvc_frame_.step = 0;
     uvc_frame_.sequence = 0;
@@ -888,10 +485,10 @@ int Camera::UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_nod
     uvc_frame_.capture_time.tv_usec = 0;
     uvc_frame_.data = new uint8_t[uvc_frame_.data_bytes];
 
-    rgb_frame_.data_bytes = 3 * enumerated_width * enumerated_height;
-    rgb_frame_.actual_bytes = 3 * enumerated_width * enumerated_height;
-    rgb_frame_.width = enumerated_width;
-    rgb_frame_.height = enumerated_height;
+    rgb_frame_.data_bytes = 3 * camera_config.width_enumerated_ * camera_config.height_;
+    rgb_frame_.actual_bytes = 3 * camera_config.width_enumerated_ * camera_config.height_;
+    rgb_frame_.width = camera_config.width_enumerated_;
+    rgb_frame_.height = camera_config.height_;
     rgb_frame_.frame_format = CAMERA_FRAME_FORMAT_RGB;
     rgb_frame_.step = 0;
     rgb_frame_.sequence = 0;
@@ -942,7 +539,7 @@ int Camera::UvcV4l2Exit(void) {
 
     /* signal stop streaming */
 
-    /* joing */
+    /* join */
 
     /* Stop streaming. */
     // VideoEnable(&device_, 0);
@@ -1981,11 +1578,13 @@ void Camera::FramePull(__attribute__((unused)) int width, __attribute__((unused)
 }
 
 
-int Camera::Start() 
+int Camera::Start(const CameraConfig& camera_config) 
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
 
     int ret = 0;
+
+    camera_config_ = camera_config;
 
     camera_frame_queue_ = make_shared<FrameQueue<CameraFrame>>();
 
@@ -2014,14 +1613,9 @@ int Camera::Start()
         }
 #endif
 
-        int enumerated_width{640};
-        int enumerated_height{480};
+        camera_frame_queue_->Init(8, camera_config.width_actual_*camera_config.height_*3);
 
-        camera_frame_queue_->Init(8, enumerated_width*enumerated_height*3);
-
-        // TODO dev node and camera config params to be passed in
-        string device_node_string{"/dev/video0"};
-        if (!UvcV4l2Init(device_node_string, enumerated_width, enumerated_height)) {
+        if (!UvcV4l2Init(camera_config_)) {
             cout<<"UvcV4l2Init() success"<<endl;
 
             // TODO enum into post_request_
@@ -2031,7 +1625,9 @@ int Camera::Start()
             frame_pull_thread_ = thread(
             [this]
             {
-                FramePull(width_, height_);
+                // FramePull(width_, height_);
+// TODO lambda scope to use passed camera_config
+                FramePull(camera_config_.width_actual_, camera_config_.height_);
             });
 
         } else {
@@ -2182,8 +1778,8 @@ int Camera::UvcV4l2GetFrame(void)
     /* render image */
     uint8_t* buffer = (uint8_t*)(device_.buffers[buf.index].mem[0]);
 
-    int width = camera_config.width_actual;
-    int height = camera_config.height;
+    int width = camera_config_.width_actual_;
+    int height = camera_config_.height_;
 //    int bytes_per_pixel = camera_config.bytes_per_pixel;
 //    int bytes_per_row = bytes_per_pixel * width;
 

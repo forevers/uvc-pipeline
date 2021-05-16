@@ -30,7 +30,8 @@ struct Device
     unsigned int patternsize[VIDEO_MAX_PLANES];
 };
 
-
+// TODO for CameraConfig
+#include "camera_types.h"
 
 class ICameraControl {
 
@@ -42,7 +43,8 @@ public:
 
     //virtual int Prepare(int vid, int pid, int fd, int busnum, int devaddr, const char *usbfs) = 0;
 
-    virtual int Start() = 0;
+    virtual int Start(const CameraConfig& camera_config) = 0;
+
     virtual int Stop() = 0;
     virtual bool IsRunning() = 0;
     // +++++ TODO move to pipe interface
@@ -51,7 +53,7 @@ public:
 
     //virtual int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) = 0;
     virtual std::string GetSupportedVideoModes() = 0;
-    virtual int UvcV4l2Init(/*IFrameQueue* frame_queue_ifc, */std::string device_node, int enumerated_width, int enumerated_height/*, int actual_width, int actual_height*/) = 0;
+    virtual int UvcV4l2Init(const CameraConfig& camera_config) = 0;
     virtual int UvcV4l2Exit(void) = 0;
 
     // virtual int QueryCapabilities(Device *dev, unsigned int *capabilities) = 0;

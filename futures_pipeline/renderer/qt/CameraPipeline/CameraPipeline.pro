@@ -35,6 +35,7 @@ HEADERS += \
         mainwindow.h
 
 SOURCES += $$PWD/../../../camera/camera.cpp
+SOURCES += $$PWD/../../../camera/camera-capabilities.cpp
 SOURCES += $$PWD/../../../utils/exec-shell.cpp
 SOURCES += $$PWD/../../../utils/sync-log.cpp
 
