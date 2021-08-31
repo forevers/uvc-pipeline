@@ -218,13 +218,6 @@ void other_routine(int seconds_delay)
 }
 
 
-/* start the pipeline */
-void Start()
-{
-
-}
-
-
 void handler(int signo)
 {
     switch(signo) {

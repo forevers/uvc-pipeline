@@ -42,7 +42,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->openCloseCameraButton, &QPushButton::clicked, this, &MainWindow::onOpenCloseCameraButtonClicked);
     connect(ui->fullScreenButton, &QPushButton::clicked, this, &MainWindow::onFullScreenButtonClicked);
 
-
     /* camera parameters */
     connect(ui->cameraComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int idx){ onCameraComboBoxIndexChanged(idx);});
     connect(ui->formatComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int idx){ onFormatComboBoxIndexChanged(idx);});
@@ -132,6 +131,7 @@ void MainWindow::onOpenCloseCameraButtonClicked()
        /* present camera capabilities */
        /* validate schema */
        // TODO client side api construct camera_modes object for iteration and GUI render
+       // TODO util framework providing list string?
        {
            rapidjson::Document document;
            document.Parse(g_schema);
@@ -317,7 +317,7 @@ void MainWindow::onStartStopButtonClicked()
 
            qInfo() << "enter start streaming section";
 
-           cout<<"width: "<<width_<<"height: "<<height_<<endl;
+           cout<<"width: "<<width_<<", height: "<<height_<<endl;
            camera_->Start(camera_config_);
 
            running_ = true;

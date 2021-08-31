@@ -41,7 +41,7 @@ struct CameraConfig
 {
     CameraConfig(
         std::string camera_dev_node,
-        std::string format,
+        std::string format,                         /* v4l2 video format */
         int bytes_per_pixel,
         int width_enumerated,
         int width_actual,
@@ -50,6 +50,7 @@ struct CameraConfig
         int fps,
         v4l2_fract time_per_frame) :
             camera_dev_node_{camera_dev_node},
+            format_{format},
             bytes_per_pixel_{bytes_per_pixel},
             width_enumerated_{width_enumerated},
             width_actual_{width_actual},

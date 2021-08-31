@@ -1481,7 +1481,11 @@ const char* Camera::V4l2FormatName(unsigned int fourcc)
 
 bool Camera::GetFrame(CameraFrame** frame)
 {
+    // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+
     *frame = camera_frame_queue_->WaitForFrame(true);
+
+    // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
 
     // TODO false or other EOS signal here ?
     return true;
@@ -1684,13 +1688,15 @@ int Camera::Stop() {
         synclog_->LogV("[",__func__,": ",__LINE__,"]: ","post join");
     }
 
-    /* block for client release of frame queue interface */
-    std::unique_lock<std::mutex> lk(release_frame_queue_mtx_);
-    if (!release_frame_queue_) {
-        synclog_->LogV("[",__func__,": ",__LINE__,"]: ","pre release_frame_queue_cv.wait()");
-        release_frame_queue_cv.wait(lk);
+    {
+        /* block for client release of frame queue interface */
+        std::unique_lock<std::mutex> lk(release_frame_queue_mtx_);
+        while (!release_frame_queue_) {
+            synclog_->LogV("[",__func__,": ",__LINE__,"]: ","pre release_frame_queue_cv.wait()");
+            release_frame_queue_cv.wait(lk);
+            synclog_->LogV("[",__func__,": ",__LINE__,"]: ","post release_frame_queue_cv.wait()");
+        }
         release_frame_queue_ = false;
-        synclog_->LogV("[",__func__,": ",__LINE__,"]: ","post release_frame_queue_cv.wait()");
     }
 
     // TODO create method for client to release queue ... should be abstract shared ifc ptr set to nullptr which in its desctructor signal this cv_status
@@ -1826,6 +1832,17 @@ int Camera::UvcV4l2GetFrame(void)
         // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","reuse ",rgb_frame->reuse_token," allocated @: ", static_cast<void*>(rgb_frame->data));
 
         // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","copy size: ",width*3*height);
+
+        /* fill metadata */
+        rgb_frame->reuse_token = 0;
+        rgb_frame->data_bytes = rgb_frame_.data_bytes;
+        rgb_frame->actual_bytes = rgb_frame_.actual_bytes;
+        rgb_frame->width = rgb_frame_.width;
+        rgb_frame->height = rgb_frame_.height;
+        rgb_frame->frame_format = rgb_frame_.frame_format;
+        rgb_frame->step = rgb_frame_.step;
+        rgb_frame->data_bytes = rgb_frame_.data_bytes;
+        memcpy(&rgb_frame->capture_time, &rgb_frame_.capture_time, sizeof(rgb_frame_.capture_time));
 
         memcpy(rgb_frame->data, rgb_frame_.data, width*3*height);
         // TODO why 2 params?

@@ -28,7 +28,8 @@ https://dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.gz
 
 ## cmake
     ```console
-    cmake -D CMAKE_C_COMPILER=clang-6.0 -D CMAKE_CXX_COMPILER=clang++-6.0 ..
+    $ mkdir build && cd build
+    $ cmake -D CMAKE_C_COMPILER=clang-6.0 -D CMAKE_CXX_COMPILER=clang++-6.0 ..
     ```
     
 ## gtkmm Rendering

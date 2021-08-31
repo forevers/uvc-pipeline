@@ -86,7 +86,8 @@ template <class T>
 FrameQueue<T>::FrameQueue() :
     initialized_{false},
     num_frames_(0),
-    synclog_(SyncLog::GetLog())
+    synclog_(SyncLog::GetLog()),
+    null_frame_on_empty_{false}
 {
     synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
 
