@@ -42,7 +42,11 @@ private:
 
     CameraFrame uvc_frame_;
 
+    mutable std::mutex rgb_frame_mutex_;
     CameraFrame* rgb_frame_;
+
+    /* construct camera modes rapidjason camera_modes_doc_ Document Object Model(DOM) */
+    void RefreshCameraCapabilities();
 
     /* escape key toggle full screen mode */
     bool on_key_press_event(GdkEventKey* event) override;
@@ -71,7 +75,7 @@ private:
     int enumerated_width_, enumerated_height_;
     int actual_width_, actual_height_;
 
-    /* Signal handlers. */
+    /* signal handlers */
     bool on_image_src_button_pressed(GdkEventButton* button_event);
     bool on_image_proc_button_pressed(GdkEventButton* button_event);
     void on_open_camera_clicked();
@@ -86,7 +90,7 @@ private:
     void on_quit_button_clicked();
 
     void update_widgets();
-    
+
     void InitializeUI();
     void ShowUI();
 
@@ -96,13 +100,13 @@ private:
     void RenderFrame();
 
     /* layout */
-    
+
     /* top level vertical box */
     Gtk::Box vertical_box_;
-    
+
     /* banner label */
     Gtk::Label banner_;
-    
+
     /* auto-scaling image windows */
     Gtk::EventBox event_box_src_;
     Gtk::EventBox event_box_proc_;

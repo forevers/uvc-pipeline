@@ -536,7 +536,7 @@ int main(int argc, char *argv[])
     end = camera_format_resolution_.find(delim, start);
     height = stoi(camera_format_resolution_.substr(start, end - start));
 
-    CameraConfig camera_config(camera_dev_node_, "none", 2, width, width, height, width*480*3, -1, {1, 30});
+    CameraConfig camera_config(camera_dev_node_, "none", 2, width, width, height, width*height*3, -1, {1, 30});
 
     camera_->Start(camera_config);
     {        

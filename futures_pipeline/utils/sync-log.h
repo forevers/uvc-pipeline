@@ -5,6 +5,8 @@
 #include <mutex>
 #include <string>
 
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define FFL "[",__FILENAME__,":",__func__,":",__LINE__,"]: "
 
 class SyncLog
 {

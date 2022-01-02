@@ -3,13 +3,17 @@
 
 #include <QMainWindow>
 #include <QDebug>
+#include <QMutex>
 #include <QThread>
+#include <QWaitCondition>
 
 #include "camera.h"
+#include "sync-log.h"
 
 namespace Ui {
-class MainWindow;
+    class MainWindow;
 }
+
 
 /* worker object for frame processing */
 class Worker : public QObject
@@ -20,8 +24,14 @@ public:
     Worker(QSharedPointer<Camera> camera);
     ~Worker();
 
+    QMutex request_stop_mutex_;
+    bool request_stop_;
+
 private:
     QSharedPointer<Camera> camera_;
+
+    /* console logger */
+    std::shared_ptr<SyncLog> synclog_;
 
 public slots:
     /* frame processing */
@@ -84,8 +94,12 @@ private:
     /* selected camera configuration */
     CameraConfig camera_config_;
 
+    /* construct camera modes rapidjason camera_modes_doc_ Document Object Model(DOM) */
+    void RefreshCameraCapabilities();
     QStringList CamaraParameterSelectionList(QString selection_type);
 
+    /* console logger */
+    std::shared_ptr<SyncLog> synclog_;
 
 public slots:
     /* frame processing */

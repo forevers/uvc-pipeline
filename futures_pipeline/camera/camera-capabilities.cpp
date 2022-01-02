@@ -1,7 +1,7 @@
 #include "camera-capabilities.h"
 
 #include <iostream>
-#include <sstream>  
+#include <sstream>
 #include <stdio.h>
 
 #include "rapidjson/document.h"
@@ -13,6 +13,12 @@ using namespace rapidjson;
 using namespace std;
 
 
+const std::set<std::string> CameraCapabilities::supported_video_formats_ = {
+    "YUYV 4:2:2",
+    "UYVY 4:2:2"
+    };
+
+
 CameraCapabilities::CameraCapabilities() :
     detected_{false}
 {
@@ -21,7 +27,7 @@ CameraCapabilities::CameraCapabilities() :
     // TODO linux udev rule, android equivalent to detect usb vbus and register/deregister cameras
     /* v4l2-ctl camera mode detection */
     if (true == (detected_ = DetectCameras())) {
-        cout<<"cameras detected"<<endl;
+        //cout<<"cameras detected"<<endl;
     } else {
         cout<<"no cameras detected"<<endl;
     }
@@ -30,19 +36,22 @@ CameraCapabilities::CameraCapabilities() :
 
 CameraCapabilities::~CameraCapabilities()
 {
-    
+
 }
 
 
-bool CameraCapabilities::DetectCameras() 
+bool CameraCapabilities::DetectCameras()
 {
-    size_t pos = 0;
-    size_t pos_end = 0;
+    size_t pos{0};
     bool detected = false;
 
+    /* 'Card type     : ' */
     string camera_card_type;
-
+    /* one per camera dev node */
     Value camera_array(kArrayType);
+
+    auto supported_video_formats = SupportedVideoFormats_();
+
     Document::AllocatorType& allocator = camera_doc_.GetAllocator();
 
     /* active video device nodes */
@@ -58,192 +67,241 @@ bool CameraCapabilities::DetectCameras()
 
         string list_formats = "v4l2-ctl --device=" + device_node + " -D --list-formats-ext";
         string device_formats = exec(list_formats.c_str());
+        stringstream device_formats_ss(device_formats);
 
         /* /dev/video<x> */
         Value device_node_val;
         device_node_val.SetString(device_node.c_str(), device_node.length(), allocator);
 
         Value camera_card_type_val;
-        pos = 0;
-        string delimiter = "Card type     : ";
-        if (string::npos != (pos = device_formats.find(delimiter, pos))) {
 
-            pos += delimiter.length();
+        string line;
+        string delimiter;
 
-            if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-
-                size_t len = pos_end - pos;
-                camera_card_type = device_formats.substr(pos, len);
-                pos = pos_end;
+        /* 'Card type     : ' */
+        bool parsed = false;
+        delimiter = "Card type     : ";
+        while (!device_formats_ss.eof()) {
+            getline(device_formats_ss, line);
+            if (string::npos != (pos = line.find(delimiter))) {
+                pos += delimiter.length();
+                camera_card_type = line.substr(pos);
+                parsed = true;
                 camera_card_type_val.SetString(camera_card_type.c_str(), camera_card_type.length(), allocator);
+                break;
             }
         }
+        if (parsed == false) {
+            cout<<"'Card type     :' parse failure"<<endl;
+            return false;
+        }
 
+        /* 'ioctl: VIDIOC_ENUM_FMT' */
         Value capture_type_array(kArrayType);
+        parsed = false;
         delimiter = "ioctl: VIDIOC_ENUM_FMT";
-        if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-            
-            pos += delimiter.length();
+        while (!device_formats_ss.eof()) {
+            getline(device_formats_ss, line);
+            if (string::npos != (pos = line.find(delimiter))) {
+                parsed = true;
+                break;
+            }
+        }
+        if (parsed == false) {
+            cout<<"'ioctl: VIDIOC_ENUM_FMT' parse failure"<<endl;
+            return false;
+        }
 
-            int index; 
-            string type, format, name;
+        int index;
+        string type, format, name;
 
-            /* ioctl: VIDIOC_ENUM_FMT Index's */
+        /* parse camera device node information */
+        while (!device_formats_ss.eof()) {
+
+            getline(device_formats_ss, line);
+
+            /* end of device node information */
+            if (device_formats_ss.eof()) break;
+
+            /* 'Index       : ' */
+            parsed = false;
             delimiter = "Index       : ";
-            while (string::npos != (pos = device_formats.find(delimiter, pos))) {
+            if (string::npos != (pos = line.find(delimiter))) {
+                index = stoi(line.substr(pos + delimiter.length()));
+                parsed = true;
+            }
+            if (parsed == false) {
+                cout<<"*****Index       : parse failure"<<endl;
+// cout<<"*****line.length(): "<<line.length()<<endl;
+// cout<<"*****line: "<<line<<endl;
+                return false;
+            }
 
+            /* 'Type        : ' */
+            parsed = false;
+            delimiter = "Type        : ";
+            getline(device_formats_ss, line);
+            if (string::npos != (pos = line.find(delimiter))) {
                 pos += delimiter.length();
-                if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-                    size_t len = pos_end - pos;
-                    index = stoi(device_formats.substr(pos, len));
-                    pos = pos_end;
+                type = line.substr(pos);
+                parsed = true;
+            }
+            if (parsed == false) {
+                cout<<"Type        : parse failure"<<endl;
+                return false;
+            }
+
+            /* 'Pixel Format: ' */
+            parsed = false;
+            delimiter = "Pixel Format: ";
+            while (!device_formats_ss.eof()) {
+                getline(device_formats_ss, line);
+                if (string::npos != (pos = line.find(delimiter))) {
+                    format = line.substr(pos + delimiter.length());
+                    parsed = true;
+                    break;
                 }
+            }
+            if (parsed == false) {
+                cout<<"Pixel Format: parse failure"<<endl;
+                return false;
+            }
 
-                delimiter = "Type        : ";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find("\n", pos))) {
-                        size_t len = pos_end - pos;
-                        type = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
+            /* 'Name        :' */
+            parsed = false;
+            delimiter = "Name        : ";
+            while (!device_formats_ss.eof()) {
+                getline(device_formats_ss, line);
+                if (string::npos != (pos = line.find(delimiter))) {
+                    name = line.substr(pos + delimiter.length());
+                    parsed = true;
+                    break;
                 }
+            }
+            if (parsed == false) {
+                cout<<"Name: parse failure"<<endl;
+                return false;
+            }
 
-                delimiter = "Pixel Format: ";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find('\n', pos))) {
-                        size_t len = pos_end - pos;
-                        format = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
-                }
+            /* capture type and supported format */
+            if (!type.compare("Video Capture")) {
 
-                delimiter = "Name        :";
-                if (string::npos != (pos = device_formats.find(delimiter, pos))) {
-                    pos += delimiter.length();
-                    if (string::npos != (pos_end = device_formats.find('\n', pos))) {
-                        size_t len = pos_end - pos;
-                        name = device_formats.substr(pos, len);
-                        pos = pos_end;
-                    }
-                }
+                Value capture_format_value;
+                capture_format_value.SetObject();
 
-                /* add capture types */
-                if (!type.compare("Video Capture")) {
+                Value index_val;
+                index_val.SetInt(index);
+                capture_format_value.AddMember("index", index_val, allocator);
 
-                    Value capture_format_value;
-                    capture_format_value.SetObject();
+                Value type_val;
+                type_val.SetString(type.c_str(), type.length(), allocator);
+                capture_format_value.AddMember("type", type_val, allocator);
 
-                    Value index_val;
-                    index_val.SetInt(index);
-                    capture_format_value.AddMember("index", index_val, allocator);
+                Value format_val;
+                format_val.SetString(format.c_str(), format.length(), allocator);
+                capture_format_value.AddMember("format", format_val, allocator);
 
-                    Value type_val;
-                    type_val.SetString(type.c_str(), type.length(), allocator);
-                    capture_format_value.AddMember("type", type_val, allocator);
+                Value name_val;
+                name_val.SetString(name.c_str(), name.length(), allocator);
+                capture_format_value.AddMember("name", name_val, allocator);
 
-                    Value format_val;
-                    format_val.SetString(format.c_str(), format.length(), allocator);
-                    capture_format_value.AddMember("format", format_val, allocator);
+                /* each resolution supports multiple rates */
+                Value res_rate_array(kArrayType);
 
-                    Value name_val;
-                    name_val.SetString(name.c_str(), name.length(), allocator);
-                    capture_format_value.AddMember("name", name_val, allocator);
+                /* first resolution line */
+                getline(device_formats_ss, line);
 
-                    /* each resolution supports multiple rates */
-                    Value res_rate_array(kArrayType);
+                while (line.length() != 0) {
 
-                    string res_rate = device_formats.substr(pos);
-                    stringstream res_rate_ss(res_rate);
-                    string line;
-                    string resolution;
+                    Value resolution_val;
+                    resolution_val.SetObject();
 
-                    // TODO change above the getline
+                    /* rates for a specific resolution */
+                    Value rate_array(kArrayType);
 
-                    /* eat a blank line */
-                    getline(res_rate_ss, line);
-                    getline(res_rate_ss, line);
+                    /* 'Size: Discrete ' */
+                    parsed = false;
+                    delimiter = "Size: Discrete ";
+                    if (string::npos != (pos = line.find(delimiter))) {
 
-                    while (!res_rate_ss.eof()) {
-                        
+                        string resolution = line.substr(pos + delimiter.length());
+                        resolution_val.SetString(resolution.c_str(), resolution.length(), allocator);
+                        parsed = true;
+
                         Value res_rate_val;
                         res_rate_val.SetObject();
 
-                        Value resolution_val;
-                        resolution_val.SetObject();
+                        Value rate_value;
+                        rate_value.SetObject();
+                        bool rate_found;
+                        do {
+                            rate_found = false;
 
-                        Value rate_array(kArrayType);
+                            getline(device_formats_ss, line);
 
-                        delimiter = "Size: Discrete ";
-                        if (string::npos != (pos = line.find(delimiter))) {
-
-                            resolution = line.substr(pos + delimiter.length());
-                            resolution_val.SetString(resolution.c_str(), resolution.length(), allocator);
-
-                            Value rate_value;
-                            rate_value.SetObject();
-                            do {
-
-                                getline(res_rate_ss, line);
-
-                                delimiter = "(";
-                                if (string::npos != (pos = line.find(delimiter))) {
-
-                                    string rate = line.substr(pos+1, string::npos);
-
-                                    delimiter = ")";
-                                    if (string::npos != (pos_end = rate.find(delimiter))) {
-
-                                        Value rate_value;
-                                        rate_value.SetObject();
-                                        rate_value.SetString(rate.c_str(), rate.length()-1, allocator);
-                                        rate_array.PushBack(rate_value, allocator);
-                                    }
+                            delimiter = "(";
+                            if (string::npos != (pos = line.find(delimiter))) {
+                                string rate = line.substr(pos+1, string::npos);
+                                delimiter = ")";
+                                if (string::npos != (pos = rate.find(delimiter))) {
+                                    Value rate_value;
+                                    rate_value.SetObject();
+                                    rate_value.SetString(rate.c_str(), rate.length()-1, allocator);
+                                    rate_array.PushBack(rate_value, allocator);
+                                    rate_found = true;
+                                } else {
+                                    rate_found = false;
                                 }
-                            } while (string::npos != pos);
-                        } else {
-                            getline(res_rate_ss, line);
-                        }
+                            }
+
+                        } while (rate_found == true);
 
                         if (rate_array.Size()) {
+// cout<<"*****rates added"<<endl;
                             res_rate_val.AddMember("resolution", resolution_val, allocator);
                             res_rate_val.AddMember("rates", rate_array, allocator);
                             res_rate_array.PushBack(res_rate_val, allocator);
                         }
+
+                    } else {
+                        cout<<"Size: Discrete : parse failure"<<endl;
+                        return false; // TODO resources returned ???
                     }
 
-                    if (res_rate_array.Size()) {
-                        capture_format_value.AddMember("res rates", res_rate_array, allocator);
-                        capture_type_array.PushBack(capture_format_value, allocator);
-                    }
+                    /* continue loop with next read line */
+
+                } /* end of while res_rate_ss.len() != 0 */
+
+                // TODO handle supported modes earlier
+                if (res_rate_array.Size() && (supported_video_formats.find(name) != supported_video_formats.end())) {
+                    capture_format_value.AddMember("res rates", res_rate_array, allocator);
+                    capture_type_array.PushBack(capture_format_value, allocator);
                 }
 
-                /* next format */
-                delimiter = "Index       : ";
+                /* may be empty line for next Index */
 
-            } /* end while ioctl: VIDIOC_ENUM_FMT */
-
-            if (capture_type_array.Size()) {
-                camera_device_value.AddMember("device node", device_node_val, allocator);
-                camera_device_value.AddMember("card type", camera_card_type_val, allocator);
-                camera_device_value.AddMember("formats", capture_type_array, allocator);
+            } // if (!type.compare("Video Capture"))
+            if (parsed == false) {
+                cout<<"'Index       : ' parse failure"<<endl;
+                return false;
             }
 
-            // if (camera_device_value.ObjectEmpty()) {
-            //     cout<<"empty"<<endl;
-            // }
+            /* next camera device node */
 
-        } /* if more lines for this device node */
+        } /* while (!device_formats_ss.eof()) */
 
-        /* only add dev nodes with VIDIOC_ENUM_FMT */
-        if (!camera_device_value.ObjectEmpty()) {
+        if (capture_type_array.Size()) {
+            camera_device_value.AddMember("device node", device_node_val, allocator);
+            camera_device_value.AddMember("card type", camera_card_type_val, allocator);
+            camera_device_value.AddMember("formats", capture_type_array, allocator);
             camera_array.PushBack(camera_device_value, allocator);
         }
 
     } /* while (device_list_ss >> device_node) */
 
-    camera_doc_.AddMember("cameras", camera_array, allocator);
+    if (camera_array.Size()) {
+        camera_doc_.AddMember("cameras", camera_array, allocator);
+    }
 
     if (camera_doc_.MemberCount()) {
         detected = true;
@@ -287,7 +345,7 @@ bool CameraCapabilities::DetectCameras()
         //     camera_doc_.Accept(writer);
         //     puts(sb.GetString());
         // }
-    // } 
+    // }
 
     // // valid schema
     // {
@@ -331,7 +389,7 @@ bool CameraCapabilities::DetectCameras()
     //     SchemaDocument schema(document);
 
     //     rapidjson::Document sd;
-        
+
     //     schema.GetRoot
     //     sd.Parse(schemaJson.c_str());
     // }
@@ -340,7 +398,7 @@ bool CameraCapabilities::DetectCameras()
 }
 
 
-string CameraCapabilities::GetSupportedVideoModes() 
+string CameraCapabilities::GetSupportedVideoModes()
 {
     StringBuffer sb;
     PrettyWriter<StringBuffer> writer(sb);

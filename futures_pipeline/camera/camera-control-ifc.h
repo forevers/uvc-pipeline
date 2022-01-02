@@ -41,8 +41,6 @@ public:
 
     //virtual IFrameAccessRegistration* GetFrameAccessIfc(int interface_number) = 0;
 
-    //virtual int Prepare(int vid, int pid, int fd, int busnum, int devaddr, const char *usbfs) = 0;
-
     virtual int Start(const CameraConfig& camera_config) = 0;
 
     virtual int Stop() = 0;
@@ -51,7 +49,6 @@ public:
     virtual int UvcV4l2GetFrame(void) = 0;
     // ----- TODO move to pipe interface
 
-    //virtual int SetStatusCallback(JNIEnv *env, jobject status_callback_obj) = 0;
     virtual std::string GetSupportedVideoModes() = 0;
     virtual int UvcV4l2Init(const CameraConfig& camera_config) = 0;
     virtual int UvcV4l2Exit(void) = 0;

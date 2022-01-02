@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <string>
 
 #include "rapidjson/document.h"
@@ -24,7 +25,13 @@ private:
 
     bool detected_;
 
-    // /* rapidJSON DOM- Default template parameter uses UTF8 and MemoryPoolAllocator */
+    /* supported video formats */
+    static const std::set<std::string> supported_video_formats_;
+    static const std::set<std::string>& SupportedVideoFormats_() {
+        return supported_video_formats_;
+    }
+
+    /* rapidJSON DOM- Default template parameter uses UTF8 and MemoryPoolAllocator */
     rapidjson::Document camera_modes_doc_;
 
     // // TODO udevadm monitor to see usb register and unregistered devices

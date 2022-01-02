@@ -7,7 +7,7 @@
 using namespace std;
 
 
-void set_widget_margin(Gtk::Widget& widget, int margin) 
+void set_widget_margin(Gtk::Widget& widget, int margin)
 {
     widget.set_margin_left(margin);
     widget.set_margin_right(margin);
@@ -15,11 +15,34 @@ void set_widget_margin(Gtk::Widget& widget, int margin)
     widget.set_margin_bottom(margin);
 }
 
+
 RenderUI::RenderUI() :
+    rgb_frame_mutex_{},
+    rgb_frame_{nullptr},
     scaling_{SCALE_MODE_NEAREST},
+    screen_width_{0}, screen_height_{0},
+    window_width_{0}, window_height_{0},
+    interior_border_{5},
+    widget_margin_{5},
+    full_screen_{false},
     vid_{0}, pid_{0},
     enumerated_width_{0}, enumerated_height_{0},
     actual_width_{0}, actual_height_{0},
+    vertical_box_{Gtk::ORIENTATION_VERTICAL, 5},
+    banner_{"UVC Video / OpenCV Demo"},
+    button_box_{Gtk::ORIENTATION_HORIZONTAL},
+    button_open_close_camera_{"open camera"},
+    combo_box_camera_{"placeholder"},
+    combo_box_format_{"placeholder"},
+    button_full_screen_{"full screen"},
+    button_start_stop_{"start stream"},
+    button_scaling_{"Toggle Scaling"},
+    button_quit_{"_Quit", /* mnemonic= */ true},
+    fps_label_{"fps xy.xx", true},
+    update_scroll_view_{true},
+    scrolled_window_{},
+    text_view_{},
+    message_{},
     camera_{nullptr},
     camera_types_validated_{false},
     camera_dev_nodes_size_{0},
@@ -30,40 +53,20 @@ RenderUI::RenderUI() :
     camera_resolution_{"none"},
     camera_rate_index_{0},
     camera_rate_{"none"},
-    interior_border_{5},
-    widget_margin_{5},
-    full_screen_{false},
-    vertical_box_{Gtk::ORIENTATION_VERTICAL, 5},
-    button_box_{Gtk::ORIENTATION_HORIZONTAL},
-    button_open_close_camera_{"open camera"},
-    combo_box_camera_{"placeholder"},
-    combo_box_format_{"placeholder"},
-    button_full_screen_{"full screen"},
-    button_start_stop_{"start stream"},
-    button_scaling_{"Toggle Scaling"},
-    button_quit_{"_Quit", /* mnemonic= */ true},
-    banner_{"UVC Video / OpenCV Demo"},
-    fps_label_{"fps xy.xx", true},
-    update_scroll_view_{true},
-    scrolled_window_{},
-    text_view_{},
-    message_{},
-    dispatcher_{},
     camera_config_{"none", "none", -1, -1, -1, -1, -1, -1, {0, 0}},
-    // worker_{},
+    dispatcher_{},
     worker_thread_{nullptr},
     mutex_{},
     opened_{false},
     running_{false},
-    synclog_{SyncLog::GetLog()},
-    rgb_frame_{nullptr}
+    synclog_{SyncLog::GetLog()}
 {
     set_title("Camera OpenCV Demo");
 
     set_border_width(interior_border_);
 
     /* display screen resolution */
-    Glib::RefPtr<Gdk::Screen> screen = Gdk::Screen::get_default(); 
+    Glib::RefPtr<Gdk::Screen> screen = Gdk::Screen::get_default();
     int primary_monitor = screen->get_primary_monitor();
     Gdk::Rectangle rect;
     screen->get_monitor_geometry(primary_monitor, rect);
@@ -162,17 +165,85 @@ RenderUI::RenderUI() :
     show_all_children();
 
     button_start_stop_.hide();
-    combo_box_camera_.hide();
     combo_box_format_.hide();
     combo_box_resolution_.hide();
     combo_box_rate_.hide();
     fps_label_.hide();
     button_scaling_.hide();
+
+    camera_ = make_shared<Camera>();
+
+    /* populate camera capabilities */
+    RefreshCameraCapabilities();
+
+    /* present inital camera configuration options */
+    auto cameras = CamaraParameterSelectionList("cameras");
+    for (auto camera : cameras)
+        combo_box_camera_.append(camera);
+    combo_box_camera_.set_active_text(cameras[0]);
 }
 
 
 RenderUI::~RenderUI()
 {
+    camera_ = nullptr;
+}
+
+
+void RenderUI::RefreshCameraCapabilities()
+{
+    /* present camera capabilities */
+    /* validate schema */
+    {
+        rapidjson::Document document;
+        document.Parse(g_schema);
+
+        rapidjson::SchemaDocument schemaDocument(document);
+        rapidjson::SchemaValidator validator(schemaDocument);
+
+        /* parse JSON string */
+        string camera_modes = camera_->GetSupportedVideoModes();
+
+        camera_modes_doc_.Parse(camera_modes.c_str());
+
+        if (camera_modes_doc_.Accept(validator)) {
+            camera_types_validated_ = true;
+#if 0
+            std::vector<std::string> cameraStringList;
+
+            cout<<"schema validated"<<endl;
+            size_t align = 0;
+            camera_dev_nodes_size_ = camera_modes_doc_["cameras"].Size();
+            cout<<string(align, ' ')<<"num cameras: "<<camera_dev_nodes_size_<<endl;
+            for (auto& camera : camera_modes_doc_["cameras"].GetArray()) {
+                align = 2;
+                cout<<string(align, ' ')<<camera["device node"].GetString()<<endl;
+                cameraStringList.append(camera["device node"].GetString());
+                camera_formats_size_ = camera["formats"].Size();
+                cout<<string(align, ' ')<<"num formats: "<<camera_formats_size_<<endl;
+                for (auto& format : camera["formats"].GetArray()) {
+                    align += 4;
+                    cout<<string(align, ' ')<<format["index"].GetInt()<<endl;
+                    cout<<string(align, ' ')<<format["type"].GetString()<<endl;
+                    cout<<string(align, ' ')<<format["format"].GetString()<<endl;
+                    cout<<string(align, ' ')<<format["name"].GetString()<<endl;
+                    cout<<string(align, ' ')<<"num res rates: "<<format["res rates"].Size()<<endl;
+                    for (auto& res_rate : format["res rates"].GetArray()) {
+                        align = 6;
+                        cout<<string(align, ' ')<<res_rate["resolution"].GetString()<<endl;
+                        cout<<string(align, ' ')<<"num rates: "<<res_rate["rates"].Size()<<endl;
+                        for (auto& rate : res_rate["rates"].GetArray()) {
+                            align = 8;
+                            cout<<string(align, ' ')<<rate.GetString()<<endl;
+                        }
+                    }
+                }
+            }
+#endif
+         } else {
+             cout<<"schema invalidated"<<endl;
+         }
+     }
 }
 
 
@@ -201,10 +272,10 @@ bool RenderUI::on_key_press_event(GdkEventKey* key_event)
 }
 
 
-bool RenderUI::on_image_src_button_pressed(GdkEventButton* button_event)
+bool RenderUI::on_image_src_button_pressed(__attribute__((unused)) GdkEventButton* button_event)
 {
     cout << "on_image_src_button_pressed()" << endl;
-    
+
     if (event_box_proc_.is_visible()) {
         event_box_proc_.hide();
     } else {
@@ -215,7 +286,7 @@ bool RenderUI::on_image_src_button_pressed(GdkEventButton* button_event)
 }
 
 
-bool RenderUI::on_image_proc_button_pressed(GdkEventButton* button_event)
+bool RenderUI::on_image_proc_button_pressed(__attribute__((unused)) GdkEventButton* button_event)
 {
     cout << "on_image_proc_button_pressed()" << endl;
 
@@ -237,7 +308,7 @@ void RenderUI::InitializeUI()
     char buffer[11];
     snprintf(buffer, 11, "fps %5.2f", 0.);
     fps_label_.set_text(buffer);
-	
+
     scaling_ = SCALE_MODE_NEAREST;
 
     fps_label_.hide();
@@ -288,7 +359,7 @@ vector<string> RenderUI::CamaraParameterSelectionList(string selection_type)
 
 void RenderUI::on_open_camera_clicked()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     if (opened_) {
 
@@ -296,103 +367,36 @@ void RenderUI::on_open_camera_clicked()
 
         /* depopulate and hide camera configuration and control */
         button_start_stop_.hide();
-        combo_box_camera_.clear();
-        combo_box_camera_.hide();
-        combo_box_format_.clear();
+        combo_box_camera_.set_sensitive(true);
         combo_box_format_.hide();
-        combo_box_resolution_.clear();
         combo_box_resolution_.hide();
-        combo_box_rate_.clear();
         combo_box_rate_.hide();
         button_open_close_camera_.set_label("open camera");
 
-        /* release camera resources */
-        camera_.reset();
-
     } else {
+
         opened_ = true;
 
         /* render camera configuration and control */
-        combo_box_camera_.set_entry_text_column(0);
-        combo_box_camera_.show();
+        button_open_close_camera_.set_label("close camera");
+        button_start_stop_.show();
+        combo_box_camera_.set_sensitive(false);
         combo_box_format_.set_entry_text_column(0);
         combo_box_format_.show();
         combo_box_resolution_.set_entry_text_column(0);
         combo_box_resolution_.show();
         combo_box_rate_.set_entry_text_column(0);
         combo_box_rate_.show();
-        
-        synclog_->Log("opening camera");
-        camera_ = make_shared<Camera>();
 
-        /* present camera capabilities */
-        /* validate schema */
-        // TODO client side api construct camera_modes object for iteration and GUI render
-        // TODO util framework providing list string?
-        {
-            rapidjson::Document document;
-            document.Parse(g_schema);
-
-            rapidjson::SchemaDocument schemaDocument(document);
-            rapidjson::SchemaValidator validator(schemaDocument);
-
-            /* parse JSON string */
-            string camera_modes = camera_->GetSupportedVideoModes();
-            camera_modes_doc_.Parse(camera_modes.c_str());
-
-            if (camera_modes_doc_.Accept(validator)) {
-                camera_types_validated_ = true;
-                synclog_->Log("schema validated");
-                size_t align = 0;
-                camera_dev_nodes_size_ = camera_modes_doc_["cameras"].Size();
-                cout<<string(align, ' ')<<"num cameras: "<<camera_dev_nodes_size_<<endl;
-                for (auto& camera : camera_modes_doc_["cameras"].GetArray()) {
-                    align = 2;
-                    // cout<<string(align, ' ')<<camera["device node"].GetString()<<endl;
-                    camera_dev_nodes_.emplace_back(camera["device node"].GetString());
-                    //camera_formats_size_ = camera["formats"].Size();
-                    // cout<<string(align, ' ')<<"num formats: "<<camera_formats_size_<<endl;
-                    // for (auto& format : camera["formats"].GetArray()) {
-                        // align += 4;
-                        // cout<<string(align, ' ')<<format["index"].GetInt()<<endl;
-                        // cout<<string(align, ' ')<<format["type"].GetString()<<endl;
-                        // cout<<string(align, ' ')<<format["format"].GetString()<<endl;
-                        // cout<<string(align, ' ')<<format["name"].GetString()<<endl;
-                        // cout<<string(align, ' ')<<"num res rates: "<<format["res rates"].Size()<<endl;
-                        // for (auto& res_rate : format["res rates"].GetArray()) {
-                            // align = 6;
-                            // cout<<string(align, ' ')<<res_rate["resolution"].GetString()<<endl;
-                            // cout<<string(align, ' ')<<"num rates: "<<res_rate["rates"].Size()<<endl;
-                            // for (auto& rate : res_rate["rates"].GetArray()) {
-                            //     align = 8;
-                            //     cout<<string(align, ' ')<<rate.GetString()<<endl;
-                            // }
-                        // }
-                    // }
-                }
-            } else {
-                synclog_->LogV("[",__func__,": ",__LINE__,"]: ","schema invalidated");
-            }
-        }
-
-        /* present inital camera configuration options */
-        auto camera_string_vector = CamaraParameterSelectionList("cameras");
-        
-        for (auto camera : camera_string_vector)
-            combo_box_camera_.append(camera);
-        combo_box_camera_.set_active_text(camera_string_vector[0]);
-
-        button_open_close_camera_.set_label("close camera");
-        button_start_stop_.show();
     }
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 void RenderUI::on_combo_box_camera_index_changed()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     /* update selected camera */
     if (-1 != (camera_dev_node_index_ = combo_box_camera_.get_active_row_number())) {
@@ -412,23 +416,22 @@ void RenderUI::on_combo_box_camera_index_changed()
         combo_box_format_.remove_all();
     }
 
-    cout<<"camera_dev_node_index_:"<<camera_dev_node_index_<<endl;
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","camera_dev_node_index_: %d", camera_dev_node_index_);
+    synclog_->LogV(FFL,"camera_dev_node_index_: %d", camera_dev_node_index_);
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 void RenderUI::on_combo_box_format_index_changed()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     /* update selected format */
     if (-1 != (camera_format_index_ = combo_box_format_.get_active_row_number())) {
 
         // camera_format_ = combo_box_format_.get_active_text();
         camera_config_.format_ = combo_box_format_.get_active_text();
-        synclog_->LogV("[",__func__,": ",__LINE__,"]: ","camera_config_.format_: %s", camera_config_.format_ );
+        synclog_->LogV(FFL,"camera_config_.format_: %s", camera_config_.format_ );
 
         /* update dependent formats */
         combo_box_resolution_.remove_all();
@@ -449,13 +452,13 @@ void RenderUI::on_combo_box_format_index_changed()
 
     cout<<"camera_format_index_:"<<camera_format_index_<<endl;
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 void RenderUI::on_combo_box_resolution_index_changed()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     /* update selected resolution */
     if (-1 != (camera_resolution_index_ = combo_box_resolution_.get_active_row_number())) {
@@ -482,20 +485,22 @@ void RenderUI::on_combo_box_resolution_index_changed()
         for (auto rate : rate_string_vector)
             combo_box_rate_.append(rate);
         combo_box_rate_.set_active_text(rate_string_vector[0]);
+
     } else {
+
         /* clear all sub formats */
         combo_box_rate_.remove_all();
     }
 
     cout<<"camera_resolution_index_:"<<camera_resolution_index_<<endl;
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 void RenderUI::on_combo_box_rate_index_changed()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     if (-1 != (camera_rate_index_ = combo_box_rate_.get_active_row_number())) {
 
@@ -508,40 +513,34 @@ void RenderUI::on_combo_box_rate_index_changed()
 
     cout<<"camera_rate_index_:"<<camera_rate_index_<<endl;
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 void RenderUI::on_full_screen_clicked()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"entry");
+    synclog_->LogV(FFL,"exit");
 }
 
 
 // TODO follow Worker model used in qt ?
 void RenderUI::on_start_button_clicked()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     if (opened_) {
 
         // TODO replace running_ with if (worker_thread_) {
-
         if (running_) {
 
             cout<<"stop streaming"<<endl;
-            // TODO consider removing ... NULL return caused by camera_->Stop() terminates thread 
-            // worker_.stop_work();
-            camera_->Stop();
+            worker_.stop_work();
             running_ = false;
 
-            /* null the frame */
             // TODO enable this clear memset(rgb_frame_->data, 0, rgb_frame_->data_bytes);
-            cout<<"pre RenderFrame()"<<endl;
-            cout<<"post RenderFrame()"<<endl;
 
-            button_open_close_camera_.show();
+            button_open_close_camera_.set_sensitive(true);
             button_start_stop_.set_label("start stream");
 
         } else {
@@ -558,15 +557,13 @@ void RenderUI::on_start_button_clicked()
                 [this]
                 {
                     worker_.do_work(camera_, this, this);
-                    // worker_.do_work(this, this);
-                    // worker_.do_work(camera_, this);
                 });
 
             running_ = true;
-            button_open_close_camera_.hide();
+            button_open_close_camera_.set_sensitive(false);
             button_start_stop_.set_label("stop stream");
         }
-    
+
     } else {
         cout << "camera not opened" << endl;
     }
@@ -576,7 +573,7 @@ void RenderUI::on_start_button_clicked()
     // message_ += ostr.str();
     // update_scroll_view_ = true;
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
 
 
@@ -606,7 +603,7 @@ void RenderUI::on_scaling_button_clicked()
 }
 
 
-void nop(const guint* data) {
+void nop(__attribute__((unused)) const guint* data) {
 
 }
 
@@ -620,7 +617,7 @@ void RenderUI::update_widgets()
     static timeval last;
     double fps;
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     /* cache last render time */
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -665,7 +662,7 @@ void RenderUI::update_widgets()
     case SCALE_MODE_BILINEAR:
         image_src_.set(pixbuf_rgb_src->scale_simple(image_src_render_width_, image_src_render_height_ , Gdk::INTERP_BILINEAR));
         image_proc_.set(pixbuf_rgb_proc->scale_simple(image_proc_render_width_, image_proc_render_height_ , Gdk::INTERP_BILINEAR));
-        break;    
+        break;
     case SCALE_MODE_NONE:
     default:
         image_src_.set(pixbuf_rgb_src);
@@ -701,10 +698,9 @@ void RenderUI::update_widgets()
         update_scroll_view_ = false;
     }
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 
     mutex_.unlock();
-
 }
 
 
@@ -723,7 +719,12 @@ void RenderUI::on_quit_button_clicked()
 
 void RenderUI::RenderFrame()
 {
-    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(rgb_frame_->data, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_->width, rgb_frame_->height, rgb_frame_->width*3);
+    Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src;
+    {
+    std::lock_guard<std::mutex> lock(rgb_frame_mutex_);
+    pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(rgb_frame_->data, Gdk::COLORSPACE_RGB, FALSE, 8, rgb_frame_->width, rgb_frame_->height, rgb_frame_->width*3);
+    }
+
     int image_src_render_width =  image_scaled_src_.GetImageWidth();
     int image_src_render_height =  image_scaled_src_.GetImageHeight();
     switch (scaling_) {
@@ -750,7 +751,7 @@ void RenderUI::RenderFrame()
 
 void RenderUI::on_notification_from_worker_thread()
 {
-    // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    // synclog_->LogV(FFL,"entry");
 
     // TODO check still required?
     //if (worker_thread_) {
@@ -758,28 +759,27 @@ void RenderUI::on_notification_from_worker_thread()
         // TODO replace with null frame signal
         if (worker_.has_stopped()) {
 
-            synclog_->LogV("[",__func__,": ",__LINE__,"]: ","worker_.has_stopped()");
+            synclog_->LogV(FFL,"worker_.has_stopped()");
             Blank();
 
             //     update_widgets();
             // Work is done.
+            synclog_->LogV(FFL,"pre join()");
             if (worker_thread_->joinable())
                 worker_thread_->join();
+            synclog_->LogV(FFL,"post join()");
             delete worker_thread_;
             worker_thread_ = nullptr;
-
-            /* signal frame access ifc we no longer require it */
-            // TODO change to setting ifc to nullptr and letting ifc destructor generate a signal to thread exit sequence
-            // camera_->Release();
-            // TODO Release sequencing ...
 
         } else {
 
             /* render frame */
             RenderFrame();
-
-            camera_->ReturnFrame(rgb_frame_);
-            rgb_frame_ = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(rgb_frame_mutex_);
+                camera_->ReturnFrame(rgb_frame_);
+                rgb_frame_ = nullptr;
+            }
            /* TODO Add a fixed frame delay to the queue feeding the renderer (raw v4l2 or openCV processed)
                 ... i.e. block the queue pull until N (say 2) frames have been loaded
                 ... will add fixed latency to render but will address jitter issues on nominally or async loaded platform
@@ -789,7 +789,7 @@ void RenderUI::on_notification_from_worker_thread()
     //}
 
     // update_widgets();
-    // synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    // synclog_->LogV(FFL,"exit");
 }
 
 
@@ -799,7 +799,7 @@ bool RenderUI::GetFrame(CameraFrame** frame)
 }
 
 
-void RenderUI::ReturnFrame(CameraFrame* frame)
+void RenderUI::ReturnFrame(__attribute__((unused)) CameraFrame* frame)
 {
 
 }
@@ -807,14 +807,19 @@ void RenderUI::ReturnFrame(CameraFrame* frame)
 
 /* ICameraFrameQueueServer impl */
 
-void RenderUI::Init(size_t num_elems, size_t data_bytes) {
+void RenderUI::Init(__attribute__((unused)) size_t num_elems, __attribute__((unused)) size_t data_bytes)
+{
     // TODO create and initialize queue
 };
 
 
 int RenderUI::AddFrameToQueue(CameraFrame* frame)
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    // synclog_->LogV(FFL,"entry");
+
+    // TODO impl render queue
+    std::lock_guard<std::mutex> lock(rgb_frame_mutex_);
+
     rgb_frame_ = frame;
 
     /* emit triggers a call to on_notification_from_worker_thread() */
@@ -830,7 +835,7 @@ int RenderUI::AddFrameToQueue(CameraFrame* frame)
     */
     dispatcher_.emit();
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    // synclog_->LogV(FFL,"exit");
 
     // TODO queue overflow indication
     return 0;
@@ -855,17 +860,17 @@ std::shared_ptr<ICameraFrameQueueClient> RenderUI::ClientCameraQueueIfc()
 
 void RenderUI::Blank()
 {
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","entry");
+    synclog_->LogV(FFL,"entry");
 
     int COLOR_COMPONENTS = 3;
 
     /* create and render pixmap */
     uint8_t blank[COLOR_COMPONENTS*camera_config_.width_actual_*camera_config_.height_];
     memset(blank, 0x00, sizeof(blank));
-    
+
     Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src = Gdk::Pixbuf::create_from_data(blank, Gdk::COLORSPACE_RGB, FALSE, 8, camera_config_.width_actual_, camera_config_.height_, camera_config_.width_actual_*3);
-    int image_src_render_width =  image_scaled_src_.GetImageWidth();
-    int image_src_render_height =  image_scaled_src_.GetImageHeight();
+    int image_src_render_width = image_scaled_src_.GetImageWidth();
+    int image_src_render_height = image_scaled_src_.GetImageHeight();
 
     // TODO combine with RenderFrame()
     switch (scaling_) {
@@ -888,5 +893,5 @@ void RenderUI::Blank()
     event_box_src_.queue_draw();
     event_box_proc_.queue_draw();
 
-    synclog_->LogV("[",__func__,": ",__LINE__,"]: ","exit");
+    synclog_->LogV(FFL,"exit");
 }
