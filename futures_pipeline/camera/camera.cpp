@@ -1370,9 +1370,9 @@ void Camera::FramePull(__attribute__((unused)) int width, __attribute__((unused)
 
     while (IsRunning()) {
 
-        SyncLog::GetLog()->LogV(FFL, " pre UvcV4l2GetFrame()");
+        // SyncLog::GetLog()->LogV(FFL, " pre UvcV4l2GetFrame()");
         int get_frame_retval = UvcV4l2GetFrame();
-        SyncLog::GetLog()->LogV(FFL, " post UvcV4l2GetFrame()");
+        // SyncLog::GetLog()->LogV(FFL, " post UvcV4l2GetFrame()");
 
         // terminated v4l2 ioctl return is 22
         if (-1 == get_frame_retval) {

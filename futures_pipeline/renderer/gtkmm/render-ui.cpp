@@ -56,7 +56,7 @@ RenderUI::RenderUI() :
     camera_config_{"none", "none", -1, -1, -1, -1, -1, -1, {0, 0}},
     dispatcher_{},
     worker_thread_{nullptr},
-    mutex_{},
+    render_mutex_{},
     opened_{false},
     running_{false},
     synclog_{SyncLog::GetLog()}
@@ -700,7 +700,7 @@ void RenderUI::update_widgets()
 
     synclog_->LogV(FFL,"exit");
 
-    mutex_.unlock();
+    render_mutex_.unlock();
 }
 
 
@@ -719,6 +719,11 @@ void RenderUI::on_quit_button_clicked()
 
 void RenderUI::RenderFrame()
 {
+    // synclog_->LogV(FFL,"entry");
+
+    /* single depth ui frame buffering */
+    std::lock_guard<std::mutex> lock(render_mutex_);
+
     Glib::RefPtr<Gdk::Pixbuf> pixbuf_rgb_src;
     {
     std::lock_guard<std::mutex> lock(rgb_frame_mutex_);
@@ -746,6 +751,12 @@ void RenderUI::RenderFrame()
     // explicit render of image residing in event boxed scrolled window
     event_box_src_.queue_draw();
     event_box_proc_.queue_draw();
+
+    /* single depth ui frame buffering */
+    render_busy_ = false;
+    render_cv_.notify_all();
+
+    // synclog_->LogV(FFL,"exit");
 }
 
 
@@ -770,6 +781,9 @@ void RenderUI::on_notification_from_worker_thread()
             synclog_->LogV(FFL,"post join()");
             delete worker_thread_;
             worker_thread_ = nullptr;
+            render_busy_ = false;
+
+
 
         } else {
 
@@ -818,7 +832,9 @@ int RenderUI::AddFrameToQueue(CameraFrame* frame)
     // synclog_->LogV(FFL,"entry");
 
     // TODO impl render queue
-    std::lock_guard<std::mutex> lock(rgb_frame_mutex_);
+    unique_lock<std::mutex> lock(render_mutex_);
+    while (render_busy_) render_cv_.wait(lock);
+    render_busy_ = true;
 
     rgb_frame_ = frame;
 

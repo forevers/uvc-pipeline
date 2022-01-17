@@ -199,7 +199,7 @@ int FrameQueue<T>::AddFrameToQueue(T *frame, bool is_running)
         if (is_running && circular_buffer_.size() < num_frames_) {
             circular_buffer_.push_back(frame);
             frame = nullptr;
-            synclog_->LogV(FFL," notify_one()");
+            // synclog_->LogV(FFL," notify_one()");
             queue_frame_avail_cv_.notify_one();
         }
     }
@@ -226,22 +226,22 @@ T* FrameQueue<T>::WaitForFrame(bool is_running)
 {
     T* frame = nullptr;
 
-    synclog_->LogV(FFL, " entry");
+    // synclog_->LogV(FFL, " entry");
 
     std::unique_lock<std::mutex> lk(queue_mutex_);
 
     if (!circular_buffer_.size()) {
         if (!null_frame_on_empty_) {
             /* block until elem available */
-            synclog_->LogV(FFL," pre wait");
+            // synclog_->LogV(FFL," pre wait");
             queue_frame_avail_cv_.wait(lk);
-            synclog_->LogV(FFL," post wait");
+            // synclog_->LogV(FFL," post wait");
         }
     }
 
-    synclog_->LogV(FFL, " size: ", circular_buffer_.size());
+    // synclog_->LogV(FFL, " size: ", circular_buffer_.size());
     if (is_running && circular_buffer_.size() > 0) {
-        synclog_->LogV(FFL, "pop the frame");
+        // synclog_->LogV(FFL, "pop the frame");
         frame = circular_buffer_.front();
         circular_buffer_.pop_front();
     }

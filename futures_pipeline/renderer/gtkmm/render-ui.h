@@ -166,7 +166,9 @@ private:
     Glib::Dispatcher dispatcher_;
     Worker worker_;
     std::thread* worker_thread_;
-    mutable std::mutex mutex_;
+    mutable std::mutex render_mutex_;
+    std::condition_variable render_cv_;
+    bool render_busy_ = false;
 
     bool opened_;
     bool running_;

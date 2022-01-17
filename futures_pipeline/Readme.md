@@ -31,7 +31,7 @@ https://dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.gz
     $ mkdir build && cd build
     $ cmake -D CMAKE_C_COMPILER=clang-6.0 -D CMAKE_CXX_COMPILER=clang++-6.0 ..
     ```
-    
+
 ## gtkmm Rendering
 
 ## Qt Rendering
@@ -64,3 +64,8 @@ https://www.kdab.com/wp-content/uploads/stories/multithreading-with-qt-1.pdf
 ### TODO
 - test pattern generation interface and native impl
 - expose interface to client rather than raw fsrame struct sshared ptr
+
+# nfs mount
+
+## client
+sudo mount -f nfs -o proto=tcp,port=2049 <server ip>:/ <mount directory>

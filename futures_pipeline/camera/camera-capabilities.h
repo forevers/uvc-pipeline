@@ -4,10 +4,11 @@
 #include <string>
 
 #include "rapidjson/document.h"
+#include "rapidjson/schema.h"
 
 #include "schema.h"
-#include "rapidjson/schema.h"
-// #include "rapidjson/document.h"
+#include "sync-log.h"
+
 
 class CameraCapabilities
 {
@@ -18,6 +19,7 @@ public:
 
     /* detect cameras capabilities */
     bool DetectCameras();
+    bool DetectCameras_v2();
 
     std::string GetSupportedVideoModes();
 
@@ -39,4 +41,7 @@ private:
     rapidjson::Document camera_doc_;
 
     // static bool camera_types_validated_{false};
+
+    /* console logger */
+    std::shared_ptr<SyncLog> synclog_;
 };
