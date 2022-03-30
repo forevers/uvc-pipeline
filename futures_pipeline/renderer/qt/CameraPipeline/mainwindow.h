@@ -95,7 +95,7 @@ private:
     CameraConfig camera_config_;
 
     /* construct camera modes rapidjason camera_modes_doc_ Document Object Model(DOM) */
-    void RefreshCameraCapabilities();
+    void onRefreshCameraCapabilities();
     QStringList CamaraParameterSelectionList(QString selection_type);
 
     /* console logger */

@@ -653,6 +653,46 @@ cout<<"***** push res_rate_val"<<endl;
 cout<<"***** pushed res_rate_val"<<endl;
                                             }
 
+                                        } else {
+cout<<"mipi camera?"<<endl;
+                                            parsed_resolution = false;
+                                            delimiter = "Size: Stepwise ";
+                                            if (string::npos != (pos = line.find(delimiter))) {
+                                                delimiter = " - ";
+                                                if (string::npos != (pos = line.find(delimiter))) {
+                                                    string resolution = line.substr(pos + delimiter.length());
+                                                    resolution = resolution.substr(0, resolution.find(" "));
+                                                    parsed_resolution = true;
+cout<<"*****resolution: "<<resolution<<endl;
+                                                    Value res_rate_val;
+                                                    res_rate_val.SetObject();
+
+                                                    /* no mipi camera rate specified */
+                                                    Value resolution_val;
+                                                    resolution_val.SetObject();
+                                                    resolution_val.SetString(resolution.c_str(), resolution.length(), allocator);
+                                                    Value rate_array(kArrayType);
+                                                    string rate = "unknown";
+                                                    Value rate_value;
+                                                    rate_value.SetObject();
+                                                    rate_value.SetString(rate.c_str(), rate.length(), allocator);
+cout<<"rate: "<<rate_value.GetString()<<endl;
+                                                    rate_array.PushBack(rate_value, allocator);
+
+                                                    if (rate_array.Size()) {
+cout<<"***** add resolution"<<endl;
+                                                        res_rate_val.AddMember("resolution", resolution_val, allocator);
+cout<<"***** add rate_array"<<endl;
+                                                        res_rate_val.AddMember("rates", rate_array, allocator);
+cout<<"***** push res_rate_val"<<endl;
+                                                        res_rate_array.PushBack(res_rate_val, allocator);
+cout<<"***** pushed res_rate_val"<<endl;
+                                                    }
+
+                                                    getline(device_formats_ss, line);
+                                                }
+                                            }
+
                                         }
 
                                     } while (parsed_resolution == true); /* do resolution iter */
